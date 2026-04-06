@@ -10,33 +10,22 @@ import (
 	"github.com/debendraoli/provable-sdk/internal/ffi"
 )
 
-// AuthorizationOptions configures a program authorization request.
-type AuthorizationOptions struct {
-	// ProgramName is the on-chain program identifier (e.g. "my_program.aleo").
-	ProgramName string
-
-	// FunctionName is the function within the program to authorize.
-	FunctionName string
-
-	// Inputs are the Aleo-typed input strings (e.g. ["1u32", "2u32"]).
-	Inputs []string
-
-	// PrivateKey overrides the account's private key for this authorization.
-	// If empty, the ProgramManager's account key is used.
-	PrivateKey string
-}
+// AuthorizationOptions is an alias for ProvingRequestOptions.
+//
+// Deprecated: Use ProvingRequestOptions directly.
+type AuthorizationOptions = ProvingRequestOptions
 
 // BuildAuthorization generates a snarkVM Authorization by calling Process::authorize
 // via FFI. This produces the authorization JSON without proof generation.
 //
 // The NetworkClient is used to fetch the program source and any transitive imports.
-func BuildAuthorization(ctx context.Context, nc *NetworkClient, opts AuthorizationOptions) (*Authorization, error) {
+func BuildAuthorization(ctx context.Context, nc *NetworkClient, opts ProvingRequestOptions) (*Authorization, error) {
 	return BuildAuthorizationWithCache(ctx, nc, nil, opts)
 }
 
 // BuildAuthorizationWithCache is like BuildAuthorization but caches program source
 // in the provided sync.Map (keyed by program ID). If cache is nil, no caching is performed.
-func BuildAuthorizationWithCache(ctx context.Context, nc *NetworkClient, cache *sync.Map, opts AuthorizationOptions) (*Authorization, error) {
+func BuildAuthorizationWithCache(ctx context.Context, nc *NetworkClient, cache *sync.Map, opts ProvingRequestOptions) (*Authorization, error) {
 	if opts.PrivateKey == "" {
 		return nil, ErrNoPrivateKey
 	}

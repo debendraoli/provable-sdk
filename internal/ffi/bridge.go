@@ -212,7 +212,6 @@ func Authorize(privateKey, programSource, functionName, inputsJSON, importsJSON 
 	return resultOrError(C.aleo_authorize(csk, csrc, cfn, cinputs, cimports))
 }
 
-// ─── Key derivation ──────────────────────────────────────────────────────────
 
 // Deprecated: PrivateKeyToComputeKey derives a compute key from a private key via FFI.
 // Use DeriveAllKeys instead.
@@ -238,7 +237,6 @@ func DeriveAllKeys(sk string) (string, error) {
 	return resultOrError(C.aleo_derive_all_keys(csk))
 }
 
-// ─── Hash functions ──────────────────────────────────────────────────────────
 
 // HashBHP256 computes a BHP256 hash of the input literal.
 func HashBHP256(input string) (string, error) {
@@ -324,7 +322,6 @@ func HashPoseidon8Multi(inputsJSON string) (string, error) {
 	return resultOrError(C.aleo_hash_psd8_multi(cinputs))
 }
 
-// ─── Verification ────────────────────────────────────────────────────────────
 
 // VerifyExecution verifies a SNARK execution proof offline.
 func VerifyExecution(executionJSON string) (bool, error) {

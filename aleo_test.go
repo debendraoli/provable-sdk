@@ -13,7 +13,6 @@ import (
 	"golang.org/x/crypto/nacl/box"
 )
 
-// ─── Unit tests ──────────────────────────────────────────────────────────────
 
 func TestNewAccount(t *testing.T) {
 	account, err := NewAccount()
@@ -185,7 +184,6 @@ func TestNetworkTypes(t *testing.T) {
 	}
 }
 
-// ─── Network client tests (httptest) ─────────────────────────────────────────
 
 func newTestServer(handler http.HandlerFunc) (*httptest.Server, *NetworkClient) {
 	srv := httptest.NewServer(handler)
@@ -360,7 +358,6 @@ func TestResolveImportsOrdered(t *testing.T) {
 	}
 }
 
-// ─── Sealed box encryption tests ─────────────────────────────────────────────
 
 func TestSealedBoxEncryptDecrypt(t *testing.T) {
 	// Generate a recipient keypair.
@@ -422,7 +419,6 @@ func TestEncryptProvingRequest_WrongKeyLength(t *testing.T) {
 	}
 }
 
-// ─── ProvableClient tests (httptest) ─────────────────────────────────────────
 
 func newTestProvableServer(handler http.HandlerFunc) (*httptest.Server, *ProvableClient) {
 	srv := httptest.NewServer(handler)

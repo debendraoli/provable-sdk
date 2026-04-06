@@ -119,7 +119,6 @@ func (a *Account) Zeroize() {
 	a.address = ""
 }
 
-// ─── Password-based private key encryption ───────────────────────────────────
 //
 // Uses Argon2id for key derivation and AES-256-GCM for encryption,
 // matching the JS SDK's Encryptor pattern.

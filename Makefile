@@ -1,4 +1,4 @@
-.PHONY: build-rust clean test test-unit test-integration lint
+.PHONY: build-rust clean test test-unit test-integration lint bench
 
 # Detect OS for library extension
 UNAME_S := $(shell uname -s)
@@ -18,8 +18,6 @@ CGO_ENV := CGO_ENABLED=1 \
 	LD_LIBRARY_PATH="$(CURDIR)/$(RUST_DIR)/target/release:$$LD_LIBRARY_PATH" \
 	DYLD_LIBRARY_PATH="$(CURDIR)/$(RUST_DIR)/target/release:$$DYLD_LIBRARY_PATH"
 
-# ─── Rust bridge ──────────────────────────────────────────────────────────────
-
 build-rust:
 	cd $(RUST_DIR) && cargo build --release
 	@echo "Built: $(RUST_LIB)"
@@ -33,8 +31,6 @@ test-rust:
 lint-rust:
 	cd $(RUST_DIR) && cargo clippy -- -D warnings
 
-# ─── Go ───────────────────────────────────────────────────────────────────────
-
 test: build-rust
 	$(CGO_ENV) go test -v -count=1 ./...
 
@@ -47,6 +43,9 @@ test-integration: build-rust
 lint: build-rust
 	$(CGO_ENV) go vet ./...
 	@echo "go vet passed"
+
+bench: build-rust
+	$(CGO_ENV) go test -bench=. -benchmem -count=1 ./...
 
 build: build-rust
 	$(CGO_ENV) go build ./...

@@ -495,7 +495,6 @@ func (c *NetworkClient) applyHeaders(req *http.Request) {
 	}
 }
 
-// ─── Block Iterator ──────────────────────────────────────────────────────────
 
 // BlockIterator provides a streaming interface for iterating over a range of blocks.
 // Blocks are prefetched in batches for efficiency.
@@ -573,7 +572,6 @@ func (it *BlockIterator) Block() *Block { return it.block }
 // Err returns the first error encountered during iteration.
 func (it *BlockIterator) Err() error { return it.err }
 
-// ─── Transaction Polling ─────────────────────────────────────────────────────
 
 // WaitForTransaction polls for a transaction ID until it is confirmed or the
 // context is cancelled. pollInterval controls how frequently to check.

@@ -1,5 +1,13 @@
 # Rust build artifacts
 rust-bridge/target/
 
+# Go test binaries
+*.test
+coverage.out
+
+# Shared libraries
+*.so
+*.dylib
+
 # OS
 .DS_Store

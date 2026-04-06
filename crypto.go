@@ -98,7 +98,6 @@ func hashMulti(fn func(string) (string, error), inputs []string) (string, error)
 	return fn(string(j))
 }
 
-// ─── Verification ────────────────────────────────────────────────────────────
 
 // VerifyExecution verifies a SNARK execution proof offline without submitting
 // to the network. The executionJSON should be the JSON-serialized Execution

@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_sign_and_verify() {
-        let sk_str = call_ffi(aleo_private_key_new);
+        let sk_str = call_ffi(|| aleo_private_key_new());
         let csk = c(&sk_str);
 
         let addr_str = call_ffi(|| crate::account::aleo_private_key_to_address(csk.as_ptr()));
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_verify_wrong_message() {
-        let sk_str = call_ffi(aleo_private_key_new);
+        let sk_str = call_ffi(|| aleo_private_key_new());
         let csk = c(&sk_str);
 
         let addr_str = call_ffi(|| crate::account::aleo_private_key_to_address(csk.as_ptr()));
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn test_sign_empty_message() {
-        let sk_str = call_ffi(aleo_private_key_new);
+        let sk_str = call_ffi(|| aleo_private_key_new());
         let csk = c(&sk_str);
 
         let sig_str = call_ffi(|| aleo_sign_message(csk.as_ptr(), std::ptr::null(), 0));

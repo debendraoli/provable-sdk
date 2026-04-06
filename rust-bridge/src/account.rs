@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn test_keygen_roundtrip() {
-        let sk_str = call_ffi(aleo_private_key_new);
+        let sk_str = call_ffi(|| aleo_private_key_new());
         assert!(sk_str.starts_with("APrivateKey1"));
 
         let csk = c(&sk_str);

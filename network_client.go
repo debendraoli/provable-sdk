@@ -147,7 +147,13 @@ func (c *NetworkClient) GetProgram(ctx context.Context, programID string) (strin
 	if err != nil {
 		return "", fmt.Errorf("get program %s: %w", programID, err)
 	}
-	return string(body), nil
+	// The Aleo REST API returns program source as a JSON-quoted string.
+	// Unquote to get the actual program text with real newlines.
+	var source string
+	if err := json.Unmarshal(body, &source); err != nil {
+		return string(body), nil
+	}
+	return source, nil
 }
 
 // GetProgramImports fetches the imports of a program as a map of programID -> source.
@@ -168,7 +174,11 @@ func (c *NetworkClient) GetMappingValue(ctx context.Context, programID, mappingN
 	if err != nil {
 		return "", fmt.Errorf("get mapping %s/%s/%s: %w", programID, mappingName, key, err)
 	}
-	return string(body), nil
+	var value string
+	if err := json.Unmarshal(body, &value); err != nil {
+		return string(body), nil
+	}
+	return value, nil
 }
 
 // GetTransaction fetches a transaction by ID.
@@ -496,7 +506,6 @@ func (c *NetworkClient) applyHeaders(req *http.Request) {
 	}
 }
 
-
 // BlockIterator provides a streaming interface for iterating over a range of blocks.
 // Blocks are prefetched in batches for efficiency.
 type BlockIterator struct {
@@ -572,7 +581,6 @@ func (it *BlockIterator) Block() *Block { return it.block }
 
 // Err returns the first error encountered during iteration.
 func (it *BlockIterator) Err() error { return it.err }
-
 
 // WaitForTransaction polls for a transaction ID until it is confirmed or the
 // context is cancelled. pollInterval controls how frequently to check.

@@ -105,7 +105,6 @@ func (pm *ProgramManager) NetworkClient() *NetworkClient { return pm.networkClie
 // ProvableClient returns the underlying Provable DPS client, or nil.
 func (pm *ProgramManager) ProvableClient() *ProvableClient { return pm.provableClient }
 
-
 // ExecuteOption configures an Execute call.
 type ExecuteOption func(*ProvingRequestOptions)
 
@@ -190,7 +189,6 @@ func (pm *ProgramManager) ExecuteAndWait(ctx context.Context, programID, functio
 	return pm.networkClient.WaitForTransaction(ctx, txID, pollInterval)
 }
 
-
 // TransferPublic transfers credits using the public (on-chain balance) flow.
 func (pm *ProgramManager) TransferPublic(ctx context.Context, recipient string, amount uint64, opts ...ExecuteOption) (string, error) {
 	o := ProvingRequestOptions{
@@ -247,7 +245,6 @@ func (pm *ProgramManager) TransferPrivateToPublic(ctx context.Context, recipient
 	return pm.ExecuteViaDPS(ctx, o)
 }
 
-
 // Join combines two credit records into one.
 func (pm *ProgramManager) Join(ctx context.Context, record1, record2 string, opts ...ExecuteOption) (string, error) {
 	o := ProvingRequestOptions{
@@ -275,7 +272,6 @@ func (pm *ProgramManager) Split(ctx context.Context, record string, amount uint6
 	}
 	return pm.ExecuteViaDPS(ctx, o)
 }
-
 
 // BondValidator bonds credits to a validator.
 func (pm *ProgramManager) BondValidator(ctx context.Context, validator string, withdrawAddress string, amount uint64, commissionPercent uint8, opts ...ExecuteOption) (string, error) {
@@ -331,7 +327,6 @@ func (pm *ProgramManager) SetValidatorState(ctx context.Context, isOpen bool, op
 	}
 	return pm.ExecuteViaDPS(ctx, o)
 }
-
 
 // ExecuteRequest is a single request for batch parallel execution.
 type ExecuteRequest struct {

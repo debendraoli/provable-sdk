@@ -183,7 +183,6 @@ func Authorize(privateKey, programSource, functionName, inputsJSON, importsJSON 
 	return resultOrError(C.aleo_authorize(csk, csrc, cfn, cinputs, cimports))
 }
 
-
 // DeriveAllKeys derives view key, address, compute key, and graph key from a
 // private key in a single FFI call. Returns the JSON string.
 func DeriveAllKeys(sk string) (string, error) {
@@ -191,7 +190,6 @@ func DeriveAllKeys(sk string) (string, error) {
 	defer C.free(unsafe.Pointer(csk))
 	return resultOrError(C.aleo_derive_all_keys(csk))
 }
-
 
 // HashBHP256 computes a BHP256 hash of the input literal.
 func HashBHP256(input string) (string, error) {
@@ -276,7 +274,6 @@ func HashPoseidon8Multi(inputsJSON string) (string, error) {
 	defer C.free(unsafe.Pointer(cinputs))
 	return resultOrError(C.aleo_hash_psd8_multi(cinputs))
 }
-
 
 // VerifyExecution verifies a SNARK execution proof offline.
 func VerifyExecution(executionJSON string) (bool, error) {

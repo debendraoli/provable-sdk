@@ -114,7 +114,6 @@ func (r *ProvingResponse) TransactionID() (string, error) {
 	return tx.ID, nil
 }
 
-
 // DelegatedProvingParams configures a proving request submission.
 // This is the Go equivalent of the JS SDK's DelegatedProvingParams.
 type DelegatedProvingParams struct {

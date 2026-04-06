@@ -6,7 +6,7 @@ use snarkvm_console::{
     network::MainnetV0,
 };
 
-use crate::helpers::{ffi_catch, read_c_str, ParseAleo};
+use crate::helpers::{ParseAleo, ffi_catch, read_c_str};
 
 type N = MainnetV0;
 

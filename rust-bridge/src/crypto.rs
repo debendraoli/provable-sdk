@@ -6,7 +6,7 @@ use snarkvm_console::{
     network::MainnetV0,
 };
 
-use crate::helpers::{ffi_catch, read_c_str, ParseAleo};
+use crate::helpers::{ParseAleo, ffi_catch, read_c_str};
 
 type N = MainnetV0;
 
@@ -64,7 +64,7 @@ pub extern "C" fn aleo_verify_signature(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::account::{aleo_private_key_new, aleo_derive_all_keys};
+    use crate::account::{aleo_derive_all_keys, aleo_private_key_new};
     use crate::helpers::test_helpers::{c, call_ffi};
 
     fn derive_address(sk_cstr: &std::ffi::CString) -> String {
@@ -103,7 +103,8 @@ mod tests {
         let csig = c(&sig_str);
 
         let wrong = b"wrong";
-        let result = aleo_verify_signature(caddr.as_ptr(), wrong.as_ptr(), wrong.len(), csig.as_ptr());
+        let result =
+            aleo_verify_signature(caddr.as_ptr(), wrong.as_ptr(), wrong.len(), csig.as_ptr());
         assert_eq!(result, 0);
     }
 

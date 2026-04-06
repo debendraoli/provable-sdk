@@ -1,0 +1,5 @@
+# Rust build artifacts
+rust-bridge/target/
+
+# OS
+.DS_Store

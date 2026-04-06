@@ -1,0 +1,21 @@
+[package]
+name = "aleo-bridge"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "aleo_bridge"
+crate-type = ["cdylib"]
+
+[dependencies]
+snarkvm-console = { version = "=1.6.0", features = ["network"] }
+snarkvm-synthesizer = "=1.6.0"
+snarkvm-circuit-network = "=1.6.0"
+serde_json = "1"
+base64 = "0.22"
+rand = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = "thin"

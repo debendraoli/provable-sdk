@@ -114,12 +114,6 @@ func WithInputs(inputs ...string) ExecuteOption {
 	return func(o *ProvingRequestOptions) { o.Inputs = inputs }
 }
 
-// Deprecated: WithFee is a no-op. The Provable DPS handles fee estimation
-// and payment automatically. This option will be removed in a future version.
-func WithFee(_ uint64) ExecuteOption {
-	return func(*ProvingRequestOptions) {}
-}
-
 // WithPrivateKey overrides the account's private key.
 func WithPrivateKey(pk string) ExecuteOption {
 	return func(o *ProvingRequestOptions) { o.PrivateKey = pk }
@@ -153,10 +147,6 @@ type ProvingRequestOptions struct {
 
 	// Broadcast determines whether the prover should broadcast the final transaction.
 	Broadcast bool
-
-	// Deprecated: Fee is ignored. The Provable DPS handles fee estimation
-	// and payment automatically.
-	Fee uint64
 
 	// DPSPrivacy enables the encrypted proving flow (TEE).
 	// When true, the proving request is encrypted with a NaCl sealed box

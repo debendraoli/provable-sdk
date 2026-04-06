@@ -10,11 +10,6 @@ import (
 	"github.com/debendraoli/provable-sdk/internal/ffi"
 )
 
-// AuthorizationOptions is an alias for ProvingRequestOptions.
-//
-// Deprecated: Use ProvingRequestOptions directly.
-type AuthorizationOptions = ProvingRequestOptions
-
 // BuildAuthorization generates a snarkVM Authorization by calling Process::authorize
 // via FFI. This produces the authorization JSON without proof generation.
 //

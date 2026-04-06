@@ -68,7 +68,7 @@ func TestIntegration_BuildAuthorization_Credits(t *testing.T) {
 	}
 
 	nc := NewNetworkClient("https://api.explorer.provable.com/v2", MainnetV0)
-	auth, err := BuildAuthorization(context.Background(), nc, AuthorizationOptions{
+	auth, err := BuildAuthorization(context.Background(), nc, ProvingRequestOptions{
 		ProgramName:  "credits.aleo",
 		FunctionName: "transfer_public",
 		Inputs:       []string{account.Address(), "1000u64"},

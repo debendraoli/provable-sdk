@@ -10,11 +10,6 @@ package ffi
 
 // Account / key management
 extern char* aleo_private_key_new();
-extern char* aleo_private_key_to_view_key(const char* sk);
-extern char* aleo_private_key_to_address(const char* sk);
-extern char* aleo_view_key_to_address(const char* vk);
-extern char* aleo_private_key_to_compute_key(const char* sk);
-extern char* aleo_view_key_to_graph_key(const char* vk);
 extern char* aleo_derive_all_keys(const char* sk);
 
 // Signing / verification
@@ -86,30 +81,6 @@ func resultOrError(cstr *C.char) (string, error) {
 // PrivateKeyNew generates a new random Aleo private key via FFI.
 func PrivateKeyNew() (string, error) {
 	return resultOrError(C.aleo_private_key_new())
-}
-
-// Deprecated: PrivateKeyToViewKey derives a view key from a private key via FFI.
-// Use DeriveAllKeys instead.
-func PrivateKeyToViewKey(sk string) (string, error) {
-	csk := C.CString(sk)
-	defer C.free(unsafe.Pointer(csk))
-	return resultOrError(C.aleo_private_key_to_view_key(csk))
-}
-
-// Deprecated: PrivateKeyToAddress derives an address from a private key via FFI.
-// Use DeriveAllKeys instead.
-func PrivateKeyToAddress(sk string) (string, error) {
-	csk := C.CString(sk)
-	defer C.free(unsafe.Pointer(csk))
-	return resultOrError(C.aleo_private_key_to_address(csk))
-}
-
-// Deprecated: ViewKeyToAddress derives an address from a view key via FFI.
-// Use DeriveAllKeys instead.
-func ViewKeyToAddress(vk string) (string, error) {
-	cvk := C.CString(vk)
-	defer C.free(unsafe.Pointer(cvk))
-	return resultOrError(C.aleo_view_key_to_address(cvk))
 }
 
 // SignMessage signs a byte message with a private key via FFI.
@@ -212,22 +183,6 @@ func Authorize(privateKey, programSource, functionName, inputsJSON, importsJSON 
 	return resultOrError(C.aleo_authorize(csk, csrc, cfn, cinputs, cimports))
 }
 
-
-// Deprecated: PrivateKeyToComputeKey derives a compute key from a private key via FFI.
-// Use DeriveAllKeys instead.
-func PrivateKeyToComputeKey(sk string) (string, error) {
-	csk := C.CString(sk)
-	defer C.free(unsafe.Pointer(csk))
-	return resultOrError(C.aleo_private_key_to_compute_key(csk))
-}
-
-// Deprecated: ViewKeyToGraphKey derives a graph key from a view key via FFI.
-// Use DeriveAllKeys instead.
-func ViewKeyToGraphKey(vk string) (string, error) {
-	cvk := C.CString(vk)
-	defer C.free(unsafe.Pointer(cvk))
-	return resultOrError(C.aleo_view_key_to_graph_key(cvk))
-}
 
 // DeriveAllKeys derives view key, address, compute key, and graph key from a
 // private key in a single FFI call. Returns the JSON string.

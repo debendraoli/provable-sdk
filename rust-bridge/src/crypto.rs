@@ -64,15 +64,21 @@ pub extern "C" fn aleo_verify_signature(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::account::aleo_private_key_new;
+    use crate::account::{aleo_private_key_new, aleo_derive_all_keys};
     use crate::helpers::test_helpers::{c, call_ffi};
+
+    fn derive_address(sk_cstr: &std::ffi::CString) -> String {
+        let keys_json = call_ffi(|| aleo_derive_all_keys(sk_cstr.as_ptr()));
+        let keys: serde_json::Value = serde_json::from_str(&keys_json).unwrap();
+        keys["address"].as_str().unwrap().to_string()
+    }
 
     #[test]
     fn test_sign_and_verify() {
         let sk_str = call_ffi(|| aleo_private_key_new());
         let csk = c(&sk_str);
 
-        let addr_str = call_ffi(|| crate::account::aleo_private_key_to_address(csk.as_ptr()));
+        let addr_str = derive_address(&csk);
         let caddr = c(&addr_str);
 
         let msg = b"test message";
@@ -89,7 +95,7 @@ mod tests {
         let sk_str = call_ffi(|| aleo_private_key_new());
         let csk = c(&sk_str);
 
-        let addr_str = call_ffi(|| crate::account::aleo_private_key_to_address(csk.as_ptr()));
+        let addr_str = derive_address(&csk);
         let caddr = c(&addr_str);
 
         let msg = b"correct";

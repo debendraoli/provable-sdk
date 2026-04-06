@@ -173,7 +173,7 @@ Build a snarkVM authorization (without proof generation) via the native FFI brid
 
 ```go
 nc := sdk.NewNetworkClient("https://api.explorer.provable.com/v2", sdk.MainnetV0)
-auth, _ := sdk.BuildAuthorization(ctx, nc, sdk.AuthorizationOptions{
+auth, _ := sdk.BuildAuthorization(ctx, nc, sdk.ProvingRequestOptions{
     ProgramName:  "my_program.aleo",
     FunctionName: "my_function",
     Inputs:       []string{"1u32", "2u32"},

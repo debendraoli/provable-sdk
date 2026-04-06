@@ -45,6 +45,10 @@ type ProvableClient struct {
 	proverBase string
 	http       *http.Client
 
+	// Retry configuration for proving requests.
+	maxRetries int
+	baseDelay  time.Duration
+
 	// JWT cache.
 	jwtMu  sync.Mutex
 	jwt    string
@@ -88,6 +92,8 @@ func NewProvableClient(cfg ProvableConfig) (*ProvableClient, error) {
 		apiBase:    apiBase,
 		proverBase: proverBase,
 		http:       httpClient,
+		maxRetries: 3,
+		baseDelay:  1 * time.Second,
 	}, nil
 }
 
@@ -248,12 +254,9 @@ func (c *ProvableClient) SubmitProvingRequestSafe(ctx context.Context, params De
 		return nil, fmt.Errorf("get JWT: %w", err)
 	}
 
-	const maxRetries = 3
-	baseDelay := 1 * time.Second
-
-	for attempt := 0; attempt <= maxRetries; attempt++ {
+	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		if attempt > 0 {
-			delay := baseDelay * time.Duration(math.Pow(2, float64(attempt-1)))
+			delay := c.baseDelay * time.Duration(math.Pow(2, float64(attempt-1)))
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()

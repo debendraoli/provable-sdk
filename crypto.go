@@ -7,11 +7,46 @@ import (
 	"github.com/debendraoli/provable-sdk/internal/ffi"
 )
 
-// ─── Hash Functions ──────────────────────────────────────────────────────────
-//
-// These expose SnarkVM's cryptographic hash primitives via FFI.
-// Input should be an Aleo literal string (e.g. "1field", "42u64").
-// Output is the resulting field element as a string.
+// HashAlgorithm identifies a SnarkVM hash algorithm.
+type HashAlgorithm string
+
+const (
+	BHP256     HashAlgorithm = "bhp256"
+	BHP512     HashAlgorithm = "bhp512"
+	BHP768     HashAlgorithm = "bhp768"
+	BHP1024    HashAlgorithm = "bhp1024"
+	Pedersen64  HashAlgorithm = "pedersen64"
+	Pedersen128 HashAlgorithm = "pedersen128"
+	Poseidon2   HashAlgorithm = "poseidon2"
+	Poseidon4   HashAlgorithm = "poseidon4"
+	Poseidon8   HashAlgorithm = "poseidon8"
+)
+
+// Hash computes a cryptographic hash of the input Aleo literal using the specified algorithm.
+func Hash(algo HashAlgorithm, input string) (string, error) {
+	switch algo {
+	case BHP256:
+		return ffi.HashBHP256(input)
+	case BHP512:
+		return ffi.HashBHP512(input)
+	case BHP768:
+		return ffi.HashBHP768(input)
+	case BHP1024:
+		return ffi.HashBHP1024(input)
+	case Pedersen64:
+		return ffi.HashPedersen64(input)
+	case Pedersen128:
+		return ffi.HashPedersen128(input)
+	case Poseidon2:
+		return ffi.HashPoseidon2(input)
+	case Poseidon4:
+		return ffi.HashPoseidon4(input)
+	case Poseidon8:
+		return ffi.HashPoseidon8(input)
+	default:
+		return "", fmt.Errorf("unknown hash algorithm: %s", algo)
+	}
+}
 
 // HashBHP256 computes a BHP256 hash of the input Aleo literal.
 func HashBHP256(input string) (string, error) { return ffi.HashBHP256(input) }

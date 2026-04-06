@@ -115,9 +115,10 @@ func WithInputs(inputs ...string) ExecuteOption {
 	return func(o *ProvingRequestOptions) { o.Inputs = inputs }
 }
 
-// WithFee sets the fee for the execution (microcredits).
-func WithFee(fee uint64) ExecuteOption {
-	return func(o *ProvingRequestOptions) { o.Fee = fee }
+// Deprecated: WithFee is a no-op. The Provable DPS handles fee estimation
+// and payment automatically. This option will be removed in a future version.
+func WithFee(_ uint64) ExecuteOption {
+	return func(*ProvingRequestOptions) {}
 }
 
 // WithPrivateKey overrides the account's private key.
@@ -154,8 +155,8 @@ type ProvingRequestOptions struct {
 	// Broadcast determines whether the prover should broadcast the final transaction.
 	Broadcast bool
 
-	// Fee is the fee in microcredits for the execution.
-	// When > 0, a fee authorization is built and attached to the proving request.
+	// Deprecated: Fee is ignored. The Provable DPS handles fee estimation
+	// and payment automatically.
 	Fee uint64
 
 	// DPSPrivacy enables the encrypted proving flow (TEE).

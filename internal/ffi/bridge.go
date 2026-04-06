@@ -88,21 +88,24 @@ func PrivateKeyNew() (string, error) {
 	return resultOrError(C.aleo_private_key_new())
 }
 
-// PrivateKeyToViewKey derives a view key from a private key via FFI.
+// Deprecated: PrivateKeyToViewKey derives a view key from a private key via FFI.
+// Use DeriveAllKeys instead.
 func PrivateKeyToViewKey(sk string) (string, error) {
 	csk := C.CString(sk)
 	defer C.free(unsafe.Pointer(csk))
 	return resultOrError(C.aleo_private_key_to_view_key(csk))
 }
 
-// PrivateKeyToAddress derives an address from a private key via FFI.
+// Deprecated: PrivateKeyToAddress derives an address from a private key via FFI.
+// Use DeriveAllKeys instead.
 func PrivateKeyToAddress(sk string) (string, error) {
 	csk := C.CString(sk)
 	defer C.free(unsafe.Pointer(csk))
 	return resultOrError(C.aleo_private_key_to_address(csk))
 }
 
-// ViewKeyToAddress derives an address from a view key via FFI.
+// Deprecated: ViewKeyToAddress derives an address from a view key via FFI.
+// Use DeriveAllKeys instead.
 func ViewKeyToAddress(vk string) (string, error) {
 	cvk := C.CString(vk)
 	defer C.free(unsafe.Pointer(cvk))
@@ -211,14 +214,16 @@ func Authorize(privateKey, programSource, functionName, inputsJSON, importsJSON 
 
 // ─── Key derivation ──────────────────────────────────────────────────────────
 
-// PrivateKeyToComputeKey derives a compute key from a private key via FFI.
+// Deprecated: PrivateKeyToComputeKey derives a compute key from a private key via FFI.
+// Use DeriveAllKeys instead.
 func PrivateKeyToComputeKey(sk string) (string, error) {
 	csk := C.CString(sk)
 	defer C.free(unsafe.Pointer(csk))
 	return resultOrError(C.aleo_private_key_to_compute_key(csk))
 }
 
-// ViewKeyToGraphKey derives a graph key from a view key via FFI.
+// Deprecated: ViewKeyToGraphKey derives a graph key from a view key via FFI.
+// Use DeriveAllKeys instead.
 func ViewKeyToGraphKey(vk string) (string, error) {
 	cvk := C.CString(vk)
 	defer C.free(unsafe.Pointer(cvk))

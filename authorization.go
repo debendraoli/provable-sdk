@@ -118,6 +118,38 @@ func collectImports(ctx context.Context, nc *NetworkClient, cache *sync.Map, sou
 	return nil
 }
 
+// collectImportsMap is like collectImports but builds a map of programID -> source.
+func collectImportsMap(ctx context.Context, nc *NetworkClient, cache *sync.Map, source string, visited map[string]bool, imports map[string]string) error {
+	for line := range strings.SplitSeq(source, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "import ") {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		progID := strings.TrimSuffix(parts[1], ";")
+
+		if visited[progID] || progID == "credits.aleo" {
+			continue
+		}
+		visited[progID] = true
+
+		impSrc, err := fetchProgramCached(ctx, nc, cache, progID)
+		if err != nil {
+			return fmt.Errorf("fetch import %s: %w", progID, err)
+		}
+
+		if err := collectImportsMap(ctx, nc, cache, impSrc, visited, imports); err != nil {
+			return err
+		}
+
+		imports[progID] = impSrc
+	}
+	return nil
+}
+
 // fetchProgramCached fetches program source from cache or network.
 // If cache is nil, always fetches from network.
 func fetchProgramCached(ctx context.Context, nc *NetworkClient, cache *sync.Map, programID string) (string, error) {

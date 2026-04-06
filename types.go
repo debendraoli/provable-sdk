@@ -53,6 +53,7 @@ func (a *Authorization) UnmarshalJSON(data []byte) error {
 type Block struct {
 	Hash                  string          `json:"block_hash"`
 	PreviousHash          string          `json:"previous_hash"`
+	Height                uint64          `json:"height"`
 	Header                json.RawMessage `json:"header"`
 	Authority             json.RawMessage `json:"authority,omitempty"`
 	Ratifications         json.RawMessage `json:"ratifications,omitempty"`

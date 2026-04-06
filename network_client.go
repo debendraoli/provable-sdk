@@ -150,41 +150,14 @@ func (c *NetworkClient) GetProgram(ctx context.Context, programID string) (strin
 }
 
 // GetProgramImports fetches the imports of a program as a map of programID -> source.
-// This recursively resolves all transitive imports.
+// This recursively resolves all transitive imports using the shared collectImports logic.
 func (c *NetworkClient) GetProgramImports(ctx context.Context, programSource string) (map[string]string, error) {
 	imports := make(map[string]string)
-	if err := c.resolveImports(ctx, programSource, imports); err != nil {
+	visited := make(map[string]bool)
+	if err := collectImportsMap(ctx, c, nil, programSource, visited, imports); err != nil {
 		return nil, err
 	}
 	return imports, nil
-}
-
-func (c *NetworkClient) resolveImports(ctx context.Context, source string, imports map[string]string) error {
-	for _, line := range strings.Split(source, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "import ") {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) < 2 {
-			continue
-		}
-		progID := strings.TrimSuffix(parts[1], ";")
-		if _, exists := imports[progID]; exists {
-			continue
-		}
-
-		src, err := c.GetProgram(ctx, progID)
-		if err != nil {
-			return fmt.Errorf("resolve import %s: %w", progID, err)
-		}
-		imports[progID] = src
-
-		if err := c.resolveImports(ctx, src, imports); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // GetMappingValue queries a mapping value from a deployed program.

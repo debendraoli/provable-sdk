@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // Client provides convenient access to Aleo network operations.
@@ -44,7 +46,7 @@ func WithClientRetries(maxRetries int, baseDelay time.Duration) ClientOption {
 func WithClientRateLimit(reqPerSec int) ClientOption {
 	return func(c *Client) {
 		if reqPerSec > 0 {
-			c.nc.rateLimiter = newRateLimiter(reqPerSec)
+			c.nc.rateLimiter = rate.NewLimiter(rate.Limit(reqPerSec), reqPerSec)
 		}
 	}
 }

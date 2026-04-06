@@ -9,9 +9,11 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // NetworkClient communicates with an Aleo node's REST API (v2).
@@ -28,7 +30,7 @@ type NetworkClient struct {
 	baseDelay  time.Duration
 
 	// Rate limiting
-	rateLimiter *rateLimiter
+	rateLimiter *rate.Limiter
 }
 
 // NetworkClientOption configures a NetworkClient.
@@ -62,7 +64,7 @@ func WithLogger(logger *slog.Logger) NetworkClientOption {
 func WithRateLimit(reqPerSec int) NetworkClientOption {
 	return func(nc *NetworkClient) {
 		if reqPerSec > 0 {
-			nc.rateLimiter = newRateLimiter(reqPerSec)
+			nc.rateLimiter = rate.NewLimiter(rate.Limit(reqPerSec), reqPerSec)
 		}
 	}
 }
@@ -342,31 +344,7 @@ func (c *NetworkClient) GetTransactionsByBlock(ctx context.Context, height uint6
 // SubmitTransactionDebug submits a transaction with the debug flag for verbose
 // error information from the node.
 func (c *NetworkClient) SubmitTransactionDebug(ctx context.Context, transaction json.RawMessage) (string, error) {
-	url := fmt.Sprintf("%s%s/transaction/broadcast?debug=true", c.host, c.basePath())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(transaction)))
-	if err != nil {
-		return "", fmt.Errorf("create broadcast request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	c.applyHeaders(req)
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("broadcast request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read broadcast response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("broadcast failed (status %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	return strings.Trim(string(respBody), "\" \n"), nil
+	return c.submitTransaction(ctx, transaction, true)
 }
 
 // GetStatePaths queries state paths for the given commitments against
@@ -420,7 +398,14 @@ func (c *NetworkClient) GetMappingNames(ctx context.Context, programID string) (
 
 // SubmitTransaction broadcasts a transaction to the network.
 func (c *NetworkClient) SubmitTransaction(ctx context.Context, transaction json.RawMessage) (string, error) {
+	return c.submitTransaction(ctx, transaction, false)
+}
+
+func (c *NetworkClient) submitTransaction(ctx context.Context, transaction json.RawMessage, debug bool) (string, error) {
 	url := fmt.Sprintf("%s%s/transaction/broadcast", c.host, c.basePath())
+	if debug {
+		url += "?debug=true"
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(transaction)))
 	if err != nil {
@@ -456,8 +441,8 @@ func (c *NetworkClient) GetPublicBalance(ctx context.Context, address string) (u
 	val = strings.TrimSpace(val)
 	val = strings.Trim(val, "\"")
 	val = strings.TrimSuffix(val, "u64")
-	var balance uint64
-	if _, err := fmt.Sscanf(val, "%d", &balance); err != nil {
+	balance, err := strconv.ParseUint(val, 10, 64)
+	if err != nil {
 		return 0, fmt.Errorf("parse balance %q: %w", val, err)
 	}
 	return balance, nil
@@ -478,7 +463,9 @@ func (c *NetworkClient) get(ctx context.Context, url string) ([]byte, error) {
 		}
 
 		if c.rateLimiter != nil {
-			c.rateLimiter.wait(ctx)
+			if err := c.rateLimiter.Wait(ctx); err != nil {
+				return nil, err
+			}
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -509,6 +496,18 @@ func (c *NetworkClient) get(ctx context.Context, url string) ([]byte, error) {
 
 		// Retry on 429 (rate limit) and 5xx (server error)
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			// Honor Retry-After header on 429
+			if resp.StatusCode == http.StatusTooManyRequests {
+				if ra := resp.Header.Get("Retry-After"); ra != "" {
+					if secs, err := strconv.Atoi(ra); err == nil && secs > 0 {
+						select {
+						case <-ctx.Done():
+							return nil, ctx.Err()
+						case <-time.After(time.Duration(secs) * time.Second):
+						}
+					}
+				}
+			}
 			continue
 		}
 
@@ -523,68 +522,75 @@ func (c *NetworkClient) applyHeaders(req *http.Request) {
 	}
 }
 
-// ─── Rate Limiter ────────────────────────────────────────────────────────────
-
-type rateLimiter struct {
-	mu       sync.Mutex
-	interval time.Duration
-	lastCall time.Time
-}
-
-func newRateLimiter(reqPerSec int) *rateLimiter {
-	return &rateLimiter{
-		interval: time.Second / time.Duration(reqPerSec),
-	}
-}
-
-func (rl *rateLimiter) wait(ctx context.Context) {
-	rl.mu.Lock()
-	now := time.Now()
-	if wait := rl.interval - now.Sub(rl.lastCall); wait > 0 {
-		rl.mu.Unlock()
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(wait):
-		}
-		rl.mu.Lock()
-	}
-	rl.lastCall = time.Now()
-	rl.mu.Unlock()
-}
-
 // ─── Block Iterator ──────────────────────────────────────────────────────────
 
 // BlockIterator provides a streaming interface for iterating over a range of blocks.
+// Blocks are prefetched in batches for efficiency.
 type BlockIterator struct {
-	client *NetworkClient
-	ctx    context.Context
-	cur    uint64
-	end    uint64
-	block  *Block
-	err    error
+	client    *NetworkClient
+	ctx       context.Context
+	cur       uint64
+	end       uint64
+	batchSize uint64
+	buf       []*Block
+	bufIdx    int
+	block     *Block
+	err       error
 }
+
+// defaultBlockBatchSize is the number of blocks fetched per batch.
+const defaultBlockBatchSize = 50
 
 // BlockIterator creates an iterator over blocks in the range [start, end].
 func (c *NetworkClient) BlockIterator(ctx context.Context, start, end uint64) *BlockIterator {
 	return &BlockIterator{
-		client: c,
-		ctx:    ctx,
-		cur:    start,
-		end:    end,
+		client:    c,
+		ctx:       ctx,
+		cur:       start,
+		end:       end,
+		batchSize: defaultBlockBatchSize,
 	}
 }
 
 // Next advances the iterator to the next block. Returns false when done or on error.
 func (it *BlockIterator) Next() bool {
-	if it.cur > it.end || it.err != nil {
-		return false
-	}
-	it.block, it.err = it.client.GetBlock(it.ctx, it.cur)
 	if it.err != nil {
 		return false
 	}
-	it.cur++
+
+	// Serve from buffer if available.
+	if it.bufIdx < len(it.buf) {
+		it.block = it.buf[it.bufIdx]
+		it.bufIdx++
+		return true
+	}
+
+	// Check if we've exhausted the range.
+	if it.cur > it.end {
+		return false
+	}
+
+	// Fetch the next batch.
+	batchEnd := it.cur + it.batchSize - 1
+	if batchEnd > it.end {
+		batchEnd = it.end
+	}
+
+	blocks, err := it.client.GetBlockRange(it.ctx, it.cur, batchEnd)
+	if err != nil {
+		it.err = err
+		return false
+	}
+
+	it.cur = batchEnd + 1
+	it.buf = blocks
+	it.bufIdx = 0
+
+	if len(blocks) == 0 {
+		return false
+	}
+	it.block = it.buf[it.bufIdx]
+	it.bufIdx++
 	return true
 }
 
@@ -602,7 +608,7 @@ func (c *NetworkClient) WaitForTransaction(ctx context.Context, txID string, pol
 	if pollInterval == 0 {
 		pollInterval = 3 * time.Second
 	}
-	c.logger.Info("waiting for transaction", "txID", txID)
+	c.logger.Debug("waiting for transaction", "txID", txID)
 	for {
 		tx, err := c.GetTransaction(ctx, txID)
 		if err == nil {

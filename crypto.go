@@ -1,6 +1,11 @@
 package sdk
 
-import "github.com/debendraoli/provable-sdk/internal/ffi"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/debendraoli/provable-sdk/internal/ffi"
+)
 
 // ─── Hash Functions ──────────────────────────────────────────────────────────
 //
@@ -34,6 +39,29 @@ func HashPoseidon4(input string) (string, error) { return ffi.HashPoseidon4(inpu
 
 // HashPoseidon8 computes a Poseidon8 hash of the input Aleo literal.
 func HashPoseidon8(input string) (string, error) { return ffi.HashPoseidon8(input) }
+
+// HashPoseidon2Multi computes a Poseidon2 hash of multiple Aleo literal inputs.
+func HashPoseidon2Multi(inputs []string) (string, error) {
+	return hashMulti(ffi.HashPoseidon2Multi, inputs)
+}
+
+// HashPoseidon4Multi computes a Poseidon4 hash of multiple Aleo literal inputs.
+func HashPoseidon4Multi(inputs []string) (string, error) {
+	return hashMulti(ffi.HashPoseidon4Multi, inputs)
+}
+
+// HashPoseidon8Multi computes a Poseidon8 hash of multiple Aleo literal inputs.
+func HashPoseidon8Multi(inputs []string) (string, error) {
+	return hashMulti(ffi.HashPoseidon8Multi, inputs)
+}
+
+func hashMulti(fn func(string) (string, error), inputs []string) (string, error) {
+	j, err := json.Marshal(inputs)
+	if err != nil {
+		return "", fmt.Errorf("marshal inputs: %w", err)
+	}
+	return fn(string(j))
+}
 
 // ─── Verification ────────────────────────────────────────────────────────────
 

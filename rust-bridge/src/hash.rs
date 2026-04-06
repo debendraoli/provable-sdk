@@ -95,3 +95,30 @@ define_ped_hash_ffi!(aleo_hash_ped128, hash_ped128);
 define_psd_hash_ffi!(aleo_hash_psd2, hash_psd2);
 define_psd_hash_ffi!(aleo_hash_psd4, hash_psd4);
 define_psd_hash_ffi!(aleo_hash_psd8, hash_psd8);
+
+/// Multi-input Poseidon hash. Takes a JSON array of literal strings.
+macro_rules! define_psd_hash_multi_ffi {
+    ($fn_name:ident, $hasher:ident) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name(inputs_json_ptr: *const c_char) -> *mut c_char {
+            ffi_catch!(
+                concat!("panic during multi-input ", stringify!($hasher)),
+                let inputs_str = unsafe { read_c_str(inputs_json_ptr) }.ok_or("null inputs json")?;
+                let input_strings: Vec<String> =
+                    serde_json::from_str(inputs_str).map_err(|e| format!("parse inputs: {e}"))?;
+                let fields: Vec<Field<N>> = input_strings
+                    .iter()
+                    .enumerate()
+                    .map(|(i, s)| literal_to_field(s).map_err(|e| format!("input #{i}: {e}")))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let result = N::$hasher(&fields)
+                    .map_err(|e| format!("{}: {e}", stringify!($hasher)))?;
+                Ok(result.to_string())
+            )
+        }
+    };
+}
+
+define_psd_hash_multi_ffi!(aleo_hash_psd2_multi, hash_psd2);
+define_psd_hash_multi_ffi!(aleo_hash_psd4_multi, hash_psd4);
+define_psd_hash_multi_ffi!(aleo_hash_psd8_multi, hash_psd8);

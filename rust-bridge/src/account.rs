@@ -79,6 +79,26 @@ pub extern "C" fn aleo_view_key_to_graph_key(vk_ptr: *const c_char) -> *mut c_ch
     )
 }
 
+/// Derive all keys from a private key in a single FFI call.
+/// Returns a JSON object: {"view_key":"...","address":"...","compute_key":"...","graph_key":"..."}
+#[no_mangle]
+pub extern "C" fn aleo_derive_all_keys(sk_ptr: *const c_char) -> *mut c_char {
+    ffi_catch!("panic during key derivation",
+        let sk_str = unsafe { read_c_str(sk_ptr) }.ok_or("null private key pointer")?;
+        let sk: PrivateKey<N> = sk_str.parse().map_err(|e: snarkvm_console::prelude::Error| e.to_string())?;
+        let vk = ViewKey::try_from(&sk).map_err(|e| e.to_string())?;
+        let addr = Address::try_from(&sk).map_err(|e| e.to_string())?;
+        let ck = ComputeKey::try_from(&sk).map_err(|e| e.to_string())?;
+        let gk = GraphKey::try_from(&vk).map_err(|e| e.to_string())?;
+        let ck_json = serde_json::to_string(&ck).map_err(|e| format!("serialize compute key: {e}"))?;
+        let result = format!(
+            r#"{{"view_key":"{}","address":"{}","compute_key":{},"graph_key":"{}"}}"#,
+            vk, addr, ck_json, gk
+        );
+        Ok(result)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

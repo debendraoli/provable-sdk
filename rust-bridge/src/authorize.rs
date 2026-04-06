@@ -1,4 +1,5 @@
 use std::os::raw::c_char;
+use std::sync::{Mutex, OnceLock};
 
 use rand::thread_rng;
 use snarkvm_circuit_network::AleoV0;
@@ -10,6 +11,24 @@ use snarkvm_synthesizer::{Authorization, Process, Program};
 use crate::helpers::{ffi_catch, read_c_str};
 
 type N = MainnetV0;
+
+static PROCESS: OnceLock<Process<N>> = OnceLock::new();
+static PROCESS_INIT: Mutex<()> = Mutex::new(());
+
+pub(crate) fn get_or_init_process() -> Result<&'static Process<N>, String> {
+    if let Some(p) = PROCESS.get() {
+        return Ok(p);
+    }
+    let _guard = PROCESS_INIT
+        .lock()
+        .map_err(|e| format!("process init lock: {e}"))?;
+    if let Some(p) = PROCESS.get() {
+        return Ok(p);
+    }
+    let process = Process::<N>::load().map_err(|e| format!("load process: {e}"))?;
+    let _ = PROCESS.set(process);
+    Ok(PROCESS.get().unwrap())
+}
 
 /// Build a snarkVM Authorization via Process::authorize (no proof generation).
 ///
@@ -55,8 +74,8 @@ pub extern "C" fn aleo_authorize(
         let import_sources: Vec<String> =
             serde_json::from_str(imports_str).map_err(|e| format!("parse imports JSON: {e}"))?;
 
-        // Initialize the process (loads credits.aleo + universal SRS).
-        let mut process = Process::<N>::load().map_err(|e| format!("load process: {e}"))?;
+        // Clone the cached process (since add_program mutates).
+        let mut process = get_or_init_process()?.clone();
 
         // Add each import program in dependency order.
         for (i, imp_src) in import_sources.iter().enumerate() {

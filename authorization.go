@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/debendraoli/provable-sdk/internal/ffi"
 )
@@ -30,18 +31,24 @@ type AuthorizationOptions struct {
 //
 // The NetworkClient is used to fetch the program source and any transitive imports.
 func BuildAuthorization(ctx context.Context, nc *NetworkClient, opts AuthorizationOptions) (*Authorization, error) {
+	return BuildAuthorizationWithCache(ctx, nc, nil, opts)
+}
+
+// BuildAuthorizationWithCache is like BuildAuthorization but caches program source
+// in the provided sync.Map (keyed by program ID). If cache is nil, no caching is performed.
+func BuildAuthorizationWithCache(ctx context.Context, nc *NetworkClient, cache *sync.Map, opts AuthorizationOptions) (*Authorization, error) {
 	if opts.PrivateKey == "" {
 		return nil, ErrNoPrivateKey
 	}
 
-	// Fetch the program source from the network.
-	source, err := nc.GetProgram(ctx, opts.ProgramName)
+	// Fetch the program source from cache or network.
+	source, err := fetchProgramCached(ctx, nc, cache, opts.ProgramName)
 	if err != nil {
 		return nil, fmt.Errorf("fetch program %s: %w", opts.ProgramName, err)
 	}
 
 	// Resolve transitive imports (excluding credits.aleo, which is built-in).
-	importSources, err := resolveImportsOrdered(ctx, nc, source)
+	importSources, err := resolveImportsOrdered(ctx, nc, cache, source)
 	if err != nil {
 		return nil, fmt.Errorf("resolve imports: %w", err)
 	}
@@ -68,16 +75,16 @@ func BuildAuthorization(ctx context.Context, nc *NetworkClient, opts Authorizati
 // resolveImportsOrdered fetches all transitive imports for a program source,
 // returning their source strings in dependency order (leaves first).
 // credits.aleo is excluded since it's built into the Process.
-func resolveImportsOrdered(ctx context.Context, nc *NetworkClient, source string) ([]string, error) {
+func resolveImportsOrdered(ctx context.Context, nc *NetworkClient, cache *sync.Map, source string) ([]string, error) {
 	ordered := make([]string, 0)
 	visited := make(map[string]bool)
-	if err := collectImports(ctx, nc, source, visited, &ordered); err != nil {
+	if err := collectImports(ctx, nc, cache, source, visited, &ordered); err != nil {
 		return nil, err
 	}
 	return ordered, nil
 }
 
-func collectImports(ctx context.Context, nc *NetworkClient, source string, visited map[string]bool, ordered *[]string) error {
+func collectImports(ctx context.Context, nc *NetworkClient, cache *sync.Map, source string, visited map[string]bool, ordered *[]string) error {
 	for line := range strings.SplitSeq(source, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "import ") {
@@ -95,13 +102,13 @@ func collectImports(ctx context.Context, nc *NetworkClient, source string, visit
 		}
 		visited[progID] = true
 
-		impSrc, err := nc.GetProgram(ctx, progID)
+		impSrc, err := fetchProgramCached(ctx, nc, cache, progID)
 		if err != nil {
 			return fmt.Errorf("fetch import %s: %w", progID, err)
 		}
 
 		// Recurse into this import's dependencies first (depth-first).
-		if err := collectImports(ctx, nc, impSrc, visited, ordered); err != nil {
+		if err := collectImports(ctx, nc, cache, impSrc, visited, ordered); err != nil {
 			return err
 		}
 
@@ -109,4 +116,22 @@ func collectImports(ctx context.Context, nc *NetworkClient, source string, visit
 		*ordered = append(*ordered, impSrc)
 	}
 	return nil
+}
+
+// fetchProgramCached fetches program source from cache or network.
+// If cache is nil, always fetches from network.
+func fetchProgramCached(ctx context.Context, nc *NetworkClient, cache *sync.Map, programID string) (string, error) {
+	if cache != nil {
+		if v, ok := cache.Load(programID); ok {
+			return v.(string), nil
+		}
+	}
+	src, err := nc.GetProgram(ctx, programID)
+	if err != nil {
+		return "", err
+	}
+	if cache != nil {
+		cache.Store(programID, src)
+	}
+	return src, nil
 }

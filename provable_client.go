@@ -116,8 +116,42 @@ func (c *ProvableClient) GetJWT(ctx context.Context) (string, error) {
 	}
 
 	c.jwt = jwt
-	c.jwtExp = time.Now().Add(1 * time.Hour)
+	c.jwtExp = parseJWTExpiry(jwt)
 	return jwt, nil
+}
+
+// parseJWTExpiry extracts the "exp" claim from a JWT token.
+// Falls back to 1 hour from now if parsing fails.
+func parseJWTExpiry(token string) time.Time {
+	fallback := time.Now().Add(1 * time.Hour)
+
+	// Strip "Bearer " prefix if present.
+	raw := strings.TrimPrefix(token, "Bearer ")
+
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 {
+		return fallback
+	}
+
+	// Decode the payload (second part), handling unpadded base64url.
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return fallback
+	}
+
+	var claims struct {
+		Exp json.Number `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return fallback
+	}
+
+	expUnix, err := claims.Exp.Int64()
+	if err != nil || expUnix <= 0 {
+		return fallback
+	}
+
+	return time.Unix(expUnix, 0)
 }
 
 func (c *ProvableClient) fetchJWT(ctx context.Context) (string, error) {

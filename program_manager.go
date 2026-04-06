@@ -117,7 +117,7 @@ func WithInputs(inputs ...string) ExecuteOption {
 
 // WithFee sets the fee for the execution (microcredits).
 func WithFee(fee uint64) ExecuteOption {
-	return func(o *ProvingRequestOptions) { _ = fee /* fee handled by DPS */ }
+	return func(o *ProvingRequestOptions) { o.Fee = fee }
 }
 
 // WithPrivateKey overrides the account's private key.
@@ -153,6 +153,10 @@ type ProvingRequestOptions struct {
 
 	// Broadcast determines whether the prover should broadcast the final transaction.
 	Broadcast bool
+
+	// Fee is the fee in microcredits for the execution.
+	// When > 0, a fee authorization is built and attached to the proving request.
+	Fee uint64
 
 	// DPSPrivacy enables the encrypted proving flow (TEE).
 	// When true, the proving request is encrypted with a NaCl sealed box
@@ -291,7 +295,7 @@ func (pm *ProgramManager) BondValidator(ctx context.Context, validator string, w
 	o := ProvingRequestOptions{
 		ProgramName:  "credits.aleo",
 		FunctionName: "bond_validator",
-		Inputs:       []string{validator, withdrawAddress, fmt.Sprintf("%du64", amount), fmt.Sprintf("%uu8", commissionPercent)},
+		Inputs:       []string{validator, withdrawAddress, fmt.Sprintf("%du64", amount), fmt.Sprintf("%du8", commissionPercent)},
 		Broadcast:    true,
 	}
 	for _, opt := range opts {
@@ -356,14 +360,20 @@ type ExecuteResult struct {
 	Error error
 }
 
-// ExecuteBatch executes multiple programs in parallel via DPS.
+// maxBatchConcurrency is the default maximum number of concurrent DPS requests in ExecuteBatch.
+const maxBatchConcurrency = 8
+
+// ExecuteBatch executes multiple programs in parallel via DPS with bounded concurrency.
 func (pm *ProgramManager) ExecuteBatch(ctx context.Context, requests []ExecuteRequest) []ExecuteResult {
 	results := make([]ExecuteResult, len(requests))
+	sem := make(chan struct{}, maxBatchConcurrency)
 	var wg sync.WaitGroup
 	for i, req := range requests {
 		wg.Add(1)
 		go func(idx int, r ExecuteRequest) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			txID, err := pm.Execute(ctx, r.ProgramName, r.FunctionName, r.Options...)
 			results[idx] = ExecuteResult{TxID: txID, Error: err}
 		}(i, req)
@@ -383,12 +393,16 @@ func (pm *ProgramManager) BuildAuthorization(ctx context.Context, opts ProvingRe
 		return nil, ErrNoPrivateKey
 	}
 
-	return BuildAuthorization(ctx, pm.networkClient, AuthorizationOptions{
+	auth, err := BuildAuthorizationWithCache(ctx, pm.networkClient, &pm.programCache, AuthorizationOptions{
 		ProgramName:  opts.ProgramName,
 		FunctionName: opts.FunctionName,
 		Inputs:       opts.Inputs,
 		PrivateKey:   privateKey,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return auth, nil
 }
 
 // BuildProvingRequest generates an authorization and wraps it into a ProvingRequest

@@ -347,7 +347,7 @@ func TestResolveImportsOrdered(t *testing.T) {
 	defer srv.Close()
 
 	nc := NewNetworkClient(srv.URL, TestnetV0, WithRetry(0, 0))
-	imports, err := resolveImportsOrdered(context.Background(), nc, parentSrc)
+	imports, err := resolveImportsOrdered(context.Background(), nc, nil, parentSrc)
 	if err != nil {
 		t.Fatalf("resolveImportsOrdered() error: %v", err)
 	}

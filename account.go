@@ -5,9 +5,9 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"runtime"
-	"unsafe"
 
 	"github.com/debendraoli/provable-sdk/internal/ffi"
 	"golang.org/x/crypto/argon2"
@@ -19,11 +19,11 @@ import (
 // Account is safe to use from multiple goroutines for read operations (Address,
 // ViewKey, Sign). The underlying FFI calls are stateless.
 type Account struct {
-	privateKey string
-	viewKey    string
-	computeKey string
-	graphKey   string
-	address    string
+	privateKey []byte
+	viewKey    []byte
+	computeKey []byte
+	graphKey   []byte
+	address    string // address is public, no need to zeroize
 }
 
 // NewAccount generates a new random Aleo account (private key, view key, address).
@@ -46,44 +46,41 @@ func AccountFromPrivateKey(privateKey string) (*Account, error) {
 }
 
 func accountFromSK(sk string) (*Account, error) {
-	vk, err := ffi.PrivateKeyToViewKey(sk)
+	keysJSON, err := ffi.DeriveAllKeys(sk)
 	if err != nil {
-		return nil, fmt.Errorf("derive view key: %w", err)
+		return nil, fmt.Errorf("derive keys: %w", err)
 	}
-	addr, err := ffi.PrivateKeyToAddress(sk)
-	if err != nil {
-		return nil, fmt.Errorf("derive address: %w", err)
+	var keys struct {
+		ViewKey    string          `json:"view_key"`
+		Address    string          `json:"address"`
+		ComputeKey json.RawMessage `json:"compute_key"`
+		GraphKey   string          `json:"graph_key"`
 	}
-	ck, err := ffi.PrivateKeyToComputeKey(sk)
-	if err != nil {
-		return nil, fmt.Errorf("derive compute key: %w", err)
-	}
-	gk, err := ffi.ViewKeyToGraphKey(vk)
-	if err != nil {
-		return nil, fmt.Errorf("derive graph key: %w", err)
+	if err := json.Unmarshal([]byte(keysJSON), &keys); err != nil {
+		return nil, fmt.Errorf("parse derived keys: %w", err)
 	}
 	a := &Account{
-		privateKey: sk,
-		viewKey:    vk,
-		computeKey: ck,
-		graphKey:   gk,
-		address:    addr,
+		privateKey: []byte(sk),
+		viewKey:    []byte(keys.ViewKey),
+		computeKey: keys.ComputeKey,
+		graphKey:   []byte(keys.GraphKey),
+		address:    keys.Address,
 	}
 	runtime.SetFinalizer(a, func(acc *Account) { acc.Zeroize() })
 	return a, nil
 }
 
 // PrivateKey returns the private key string.
-func (a *Account) PrivateKey() string { return a.privateKey }
+func (a *Account) PrivateKey() string { return string(a.privateKey) }
 
 // ViewKey returns the view key string.
-func (a *Account) ViewKey() string { return a.viewKey }
+func (a *Account) ViewKey() string { return string(a.viewKey) }
 
 // ComputeKey returns the compute key string.
-func (a *Account) ComputeKey() string { return a.computeKey }
+func (a *Account) ComputeKey() string { return string(a.computeKey) }
 
 // GraphKey returns the graph key string.
-func (a *Account) GraphKey() string { return a.graphKey }
+func (a *Account) GraphKey() string { return string(a.graphKey) }
 
 // Address returns the Aleo address (e.g. "aleo1...").
 func (a *Account) Address() string { return a.address }
@@ -91,7 +88,7 @@ func (a *Account) Address() string { return a.address }
 // Sign signs a message with this account's private key.
 // Returns the signature as a string.
 func (a *Account) Sign(msg []byte) (string, error) {
-	return ffi.SignMessage(a.privateKey, msg)
+	return ffi.SignMessage(string(a.privateKey), msg)
 }
 
 // Verify checks a signature against an address and message.
@@ -103,25 +100,23 @@ func Verify(address string, msg []byte, signature string) (bool, error) {
 // Zeroize securely clears all key material from memory by overwriting the
 // underlying byte slices with zeros.
 func (a *Account) Zeroize() {
-	zeroString(&a.privateKey)
-	zeroString(&a.viewKey)
-	zeroString(&a.computeKey)
-	zeroString(&a.graphKey)
+	for i := range a.privateKey {
+		a.privateKey[i] = 0
+	}
+	for i := range a.viewKey {
+		a.viewKey[i] = 0
+	}
+	for i := range a.computeKey {
+		a.computeKey[i] = 0
+	}
+	for i := range a.graphKey {
+		a.graphKey[i] = 0
+	}
+	a.privateKey = nil
+	a.viewKey = nil
+	a.computeKey = nil
+	a.graphKey = nil
 	a.address = ""
-}
-
-// zeroString overwrites the backing bytes of a Go string with zeros.
-// Go strings are immutable, so we use unsafe to access the backing array.
-func zeroString(s *string) {
-	if len(*s) == 0 {
-		return
-	}
-	// Go string header: pointer + length. We overwrite the backing bytes.
-	b := unsafe.Slice(unsafe.StringData(*s), len(*s))
-	for i := range b {
-		b[i] = 0
-	}
-	*s = ""
 }
 
 // ─── Password-based private key encryption ───────────────────────────────────
@@ -141,7 +136,7 @@ const (
 // Returns a base64-encoded ciphertext that can be decrypted with
 // AccountFromEncryptedPrivateKey.
 func (a *Account) EncryptPrivateKey(password string) (string, error) {
-	if a.privateKey == "" {
+	if a.privateKey == nil {
 		return "", ErrNoPrivateKey
 	}
 
@@ -167,7 +162,7 @@ func (a *Account) EncryptPrivateKey(password string) (string, error) {
 		return "", fmt.Errorf("generate nonce: %w", err)
 	}
 
-	ciphertext := gcm.Seal(nil, nonce, []byte(a.privateKey), nil)
+	ciphertext := gcm.Seal(nil, nonce, a.privateKey, nil)
 
 	// Format: salt || nonce || ciphertext
 	result := make([]byte, 0, len(salt)+len(nonce)+len(ciphertext))

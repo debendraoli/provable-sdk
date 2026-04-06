@@ -15,6 +15,7 @@ extern char* aleo_private_key_to_address(const char* sk);
 extern char* aleo_view_key_to_address(const char* vk);
 extern char* aleo_private_key_to_compute_key(const char* sk);
 extern char* aleo_view_key_to_graph_key(const char* vk);
+extern char* aleo_derive_all_keys(const char* sk);
 
 // Signing / verification
 extern char* aleo_sign_message(const char* sk, const void* msg, size_t msg_len);
@@ -41,6 +42,9 @@ extern char* aleo_hash_ped128(const char* input);
 extern char* aleo_hash_psd2(const char* input);
 extern char* aleo_hash_psd4(const char* input);
 extern char* aleo_hash_psd8(const char* input);
+extern char* aleo_hash_psd2_multi(const char* inputs_json);
+extern char* aleo_hash_psd4_multi(const char* inputs_json);
+extern char* aleo_hash_psd8_multi(const char* inputs_json);
 
 // Verification
 extern char* aleo_verify_execution(const char* execution_json);
@@ -66,7 +70,9 @@ func resultOrError(cstr *C.char) (string, error) {
 
 	s := C.GoString(cstr)
 
-	if len(s) > 9 && s[0] == '{' {
+	// The Rust bridge signals errors with a JSON payload: {"error":"..."}
+	const errPrefix = `{"error":"`
+	if len(s) > len(errPrefix) && s[:len(errPrefix)] == errPrefix {
 		var errResp struct {
 			Error string `json:"error"`
 		}
@@ -219,6 +225,14 @@ func ViewKeyToGraphKey(vk string) (string, error) {
 	return resultOrError(C.aleo_view_key_to_graph_key(cvk))
 }
 
+// DeriveAllKeys derives view key, address, compute key, and graph key from a
+// private key in a single FFI call. Returns the JSON string.
+func DeriveAllKeys(sk string) (string, error) {
+	csk := C.CString(sk)
+	defer C.free(unsafe.Pointer(csk))
+	return resultOrError(C.aleo_derive_all_keys(csk))
+}
+
 // ─── Hash functions ──────────────────────────────────────────────────────────
 
 // HashBHP256 computes a BHP256 hash of the input literal.
@@ -282,6 +296,27 @@ func HashPoseidon8(input string) (string, error) {
 	cinput := C.CString(input)
 	defer C.free(unsafe.Pointer(cinput))
 	return resultOrError(C.aleo_hash_psd8(cinput))
+}
+
+// HashPoseidon2Multi computes a Poseidon2 hash of multiple input literals.
+func HashPoseidon2Multi(inputsJSON string) (string, error) {
+	cinputs := C.CString(inputsJSON)
+	defer C.free(unsafe.Pointer(cinputs))
+	return resultOrError(C.aleo_hash_psd2_multi(cinputs))
+}
+
+// HashPoseidon4Multi computes a Poseidon4 hash of multiple input literals.
+func HashPoseidon4Multi(inputsJSON string) (string, error) {
+	cinputs := C.CString(inputsJSON)
+	defer C.free(unsafe.Pointer(cinputs))
+	return resultOrError(C.aleo_hash_psd4_multi(cinputs))
+}
+
+// HashPoseidon8Multi computes a Poseidon8 hash of multiple input literals.
+func HashPoseidon8Multi(inputsJSON string) (string, error) {
+	cinputs := C.CString(inputsJSON)
+	defer C.free(unsafe.Pointer(cinputs))
+	return resultOrError(C.aleo_hash_psd8_multi(cinputs))
 }
 
 // ─── Verification ────────────────────────────────────────────────────────────

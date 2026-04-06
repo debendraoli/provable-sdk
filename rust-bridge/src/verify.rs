@@ -1,7 +1,6 @@
 use std::os::raw::c_char;
 
 use snarkvm_console::network::MainnetV0;
-use snarkvm_synthesizer::Process;
 
 use crate::helpers::{ffi_catch, read_c_str};
 
@@ -19,7 +18,7 @@ pub extern "C" fn aleo_verify_execution(execution_json_ptr: *const c_char) -> *m
         let exec_str = unsafe { read_c_str(execution_json_ptr) }.ok_or("null execution json")?;
         let execution: snarkvm_ledger_block::Execution<N> =
             serde_json::from_str(exec_str).map_err(|e| format!("parse execution: {e}"))?;
-        let process = Process::<N>::load().map_err(|e| format!("load process: {e}"))?;
+        let process = crate::authorize::get_or_init_process()?;
         process.verify_execution(
                 ConsensusVersion::latest(),
                 VarunaVersion::V2,

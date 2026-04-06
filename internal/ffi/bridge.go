@@ -1,7 +1,7 @@
 package ffi
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/../../rust-bridge/target/release -laleo_bridge -ldl -lm -lpthread
+#cgo LDFLAGS: -L${SRCDIR}/../../rust-bridge/target/release -L/usr/local/lib -laleo_bridge -ldl -lm -lpthread
 #cgo darwin LDFLAGS: -framework Security -framework CoreFoundation
 #cgo CFLAGS: -I${SRCDIR}/../../rust-bridge
 

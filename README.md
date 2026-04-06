@@ -30,8 +30,40 @@ sdk/
 ## Prerequisites
 
 - **Go** 1.26+
-- **Rust** 1.85+ (with `cargo`)
 - **C compiler** (for CGO)
+- **Rust** 1.85+ — only if building the native library from source
+
+## Installation
+
+### Option 1: Prebuilt library (recommended)
+
+Download and install the prebuilt native library, then `go get`:
+
+```bash
+# One-liner install (Linux / macOS)
+curl -fsSL https://raw.githubusercontent.com/debendraoli/go-provable-sdk/main/install.sh | bash
+
+# Or specify a version
+curl -fsSL https://raw.githubusercontent.com/debendraoli/go-provable-sdk/main/install.sh | bash -s v0.1.0
+
+# Then add the SDK to your project
+go get github.com/debendraoli/provable-sdk
+```
+
+### Option 2: Build from source
+
+Requires Rust 1.85+:
+
+```bash
+git clone https://github.com/debendraoli/go-provable-sdk.git
+cd go-provable-sdk
+
+# Build and install the native library to /usr/local/lib
+make install-lib
+
+# Or just build locally (library stays in rust-bridge/target/release/)
+make build
+```
 
 ## Build
 

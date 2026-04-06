@@ -1,4 +1,4 @@
-.PHONY: build-rust clean test test-unit test-integration lint bench
+.PHONY: build-rust clean test test-unit test-integration lint bench install-lib
 
 # Detect OS for library extension
 UNAME_S := $(shell uname -s)
@@ -53,6 +53,17 @@ build: build-rust
 clean: clean-rust
 	go clean ./...
 
+INSTALL_DIR ?= /usr/local/lib
+
+install-lib: build-rust
+	@echo "Installing $(RUST_LIB) to $(INSTALL_DIR)"
+	install -d $(INSTALL_DIR)
+	install -m 755 $(RUST_LIB) $(INSTALL_DIR)/
+ifeq ($(UNAME_S),Linux)
+	ldconfig || true
+endif
+	@echo "Done. You can now: go get github.com/debendraoli/provable-sdk"
+
 help:
 	@echo "Available targets:"
 	@echo "  build-rust        Build the Rust FFI bridge"
@@ -63,4 +74,5 @@ help:
 	@echo "  test-unit         Run unit tests only"
 	@echo "  test-integration  Run integration tests (needs network)"
 	@echo "  lint              Run go vet"
+	@echo "  install-lib       Build and install native lib to /usr/local/lib"
 	@echo "  clean             Clean all build artifacts"

@@ -9,7 +9,7 @@ use snarkvm_console::{
 };
 use snarkvm_synthesizer::Program;
 
-use crate::helpers::{ffi_catch, read_c_str};
+use crate::helpers::{ffi_catch, read_c_str, ParseAleo};
 
 type N = MainnetV0;
 
@@ -23,9 +23,8 @@ pub extern "C" fn aleo_decrypt_record(
     ffi_catch!("panic during record decryption",
         let ct_str = unsafe { read_c_str(ciphertext_ptr) }.ok_or("null ciphertext pointer")?;
         let vk_str = unsafe { read_c_str(vk_ptr) }.ok_or("null view key pointer")?;
-        let ciphertext: Record<N, Ciphertext<N>> =
-            ct_str.parse().map_err(|e: snarkvm_console::prelude::Error| e.to_string())?;
-        let vk: ViewKey<N> = vk_str.parse().map_err(|e: snarkvm_console::prelude::Error| e.to_string())?;
+        let ciphertext = Record::<N, Ciphertext<N>>::parse_aleo(ct_str)?;
+        let vk = ViewKey::<N>::parse_aleo(vk_str)?;
         let plaintext = ciphertext.decrypt(&vk).map_err(|e| e.to_string())?;
         Ok(plaintext.to_string())
     )
@@ -46,8 +45,7 @@ pub extern "C" fn aleo_execute_program(
         let inputs_str = unsafe { read_c_str(inputs_json_ptr) }.ok_or("null inputs json")?;
         let sk_str = unsafe { read_c_str(sk_ptr) }.ok_or("null private key")?;
 
-        let private_key: PrivateKey<N> =
-            sk_str.parse().map_err(|e: snarkvm_console::prelude::Error| e.to_string())?;
+        let private_key = PrivateKey::<N>::parse_aleo(sk_str)?;
 
         let input_strings: Vec<String> =
             serde_json::from_str(inputs_str).map_err(|e| format!("parse inputs JSON: {e}"))?;
@@ -57,9 +55,7 @@ pub extern "C" fn aleo_execute_program(
             .map(|(i, s)| s.parse::<Value<N>>().map_err(|e| format!("parse input #{i} '{s}': {e}")))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let program: Program<N> = source
-            .parse()
-            .map_err(|e: snarkvm_console::prelude::Error| format!("parse program: {e}"))?;
+        let program = Program::<N>::parse_aleo(source)?;
 
         let mut process = crate::authorize::get_or_init_process()?.clone();
         process.add_program(&program)
@@ -93,7 +89,7 @@ pub extern "C" fn aleo_execute_program(
 pub extern "C" fn aleo_program_id(program_source_ptr: *const c_char) -> *mut c_char {
     ffi_catch!("panic during program parsing",
         let source = unsafe { read_c_str(program_source_ptr) }.ok_or("null program source")?;
-        let program: Program<N> = source.parse().map_err(|e: snarkvm_console::prelude::Error| e.to_string())?;
+        let program = Program::<N>::parse_aleo(source)?;
         Ok(program.id().to_string())
     )
 }

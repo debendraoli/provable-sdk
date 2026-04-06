@@ -1,5 +1,5 @@
 use std::os::raw::c_char;
-use std::sync::{Mutex, OnceLock};
+use std::sync::LazyLock;
 
 use rand::thread_rng;
 use snarkvm_circuit_network::AleoV0;
@@ -8,26 +8,16 @@ use snarkvm_console::prelude::ToBytes;
 use snarkvm_console::program::Value;
 use snarkvm_synthesizer::{Authorization, Process, Program};
 
-use crate::helpers::{ffi_catch, read_c_str};
+use crate::helpers::{ffi_catch, read_c_str, ParseAleo};
 
 type N = MainnetV0;
 
-static PROCESS: OnceLock<Process<N>> = OnceLock::new();
-static PROCESS_INIT: Mutex<()> = Mutex::new(());
+static PROCESS: LazyLock<Result<Process<N>, String>> = LazyLock::new(|| {
+    Process::<N>::load().map_err(|e| format!("load process: {e}"))
+});
 
 pub(crate) fn get_or_init_process() -> Result<&'static Process<N>, String> {
-    if let Some(p) = PROCESS.get() {
-        return Ok(p);
-    }
-    let _guard = PROCESS_INIT
-        .lock()
-        .map_err(|e| format!("process init lock: {e}"))?;
-    if let Some(p) = PROCESS.get() {
-        return Ok(p);
-    }
-    let process = Process::<N>::load().map_err(|e| format!("load process: {e}"))?;
-    let _ = PROCESS.set(process);
-    Ok(PROCESS.get().unwrap())
+    PROCESS.as_ref().map_err(|e| e.clone())
 }
 
 /// Build a snarkVM Authorization via Process::authorize (no proof generation).
@@ -58,8 +48,7 @@ pub extern "C" fn aleo_authorize(
         let imports_str = unsafe { read_c_str(imports_json_ptr) }.ok_or("null imports json")?;
 
         // Parse private key.
-        let private_key: snarkvm_console::account::PrivateKey<N> =
-            sk_str.parse().map_err(|e: snarkvm_console::prelude::Error| e.to_string())?;
+        let private_key = snarkvm_console::account::PrivateKey::<N>::parse_aleo(sk_str)?;
 
         // Parse inputs from JSON array of strings.
         let input_strings: Vec<String> =
@@ -79,18 +68,15 @@ pub extern "C" fn aleo_authorize(
 
         // Add each import program in dependency order.
         for (i, imp_src) in import_sources.iter().enumerate() {
-            let imp_program: Program<N> = imp_src
-                .parse()
-                .map_err(|e: snarkvm_console::prelude::Error| format!("parse import #{i}: {e}"))?;
+            let imp_program = Program::<N>::parse_aleo(imp_src)
+                .map_err(|e| format!("parse import #{i}: {e}"))?;
             process
                 .add_program(&imp_program)
                 .map_err(|e| format!("add import '{}': {e}", imp_program.id()))?;
         }
 
         // Parse and add the target program.
-        let program: Program<N> = source
-            .parse()
-            .map_err(|e: snarkvm_console::prelude::Error| format!("parse program: {e}"))?;
+        let program = Program::<N>::parse_aleo(source)?;
         process
             .add_program(&program)
             .map_err(|e| format!("add program '{}': {e}", program.id()))?;

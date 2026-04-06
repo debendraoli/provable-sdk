@@ -6,7 +6,7 @@ use snarkvm_console::{
     network::MainnetV0,
 };
 
-use crate::helpers::{ffi_catch, read_c_str};
+use crate::helpers::{ffi_catch, read_c_str, ParseAleo};
 
 type N = MainnetV0;
 
@@ -26,7 +26,7 @@ pub extern "C" fn aleo_sign_message(
         } else {
             unsafe { std::slice::from_raw_parts(msg_ptr, msg_len) }
         };
-        let sk: PrivateKey<N> = sk_str.parse().map_err(|e: snarkvm_console::prelude::Error| e.to_string())?;
+        let sk = PrivateKey::<N>::parse_aleo(sk_str)?;
         let rng = &mut thread_rng();
         let sig = sk.sign_bytes(msg, rng).map_err(|e| e.to_string())?;
         Ok(sig.to_string())
@@ -50,8 +50,8 @@ pub extern "C" fn aleo_verify_signature(
         } else {
             unsafe { std::slice::from_raw_parts(msg_ptr, msg_len) }
         };
-        let addr: Address<N> = addr_str.parse().map_err(|e: snarkvm_console::prelude::Error| e.to_string())?;
-        let sig: Signature<N> = sig_str.parse().map_err(|e: snarkvm_console::prelude::Error| e.to_string())?;
+        let addr = Address::<N>::parse_aleo(addr_str)?;
+        let sig = Signature::<N>::parse_aleo(sig_str)?;
         Ok::<bool, String>(sig.verify_bytes(&addr, msg))
     }));
     match result {
@@ -65,52 +65,37 @@ pub extern "C" fn aleo_verify_signature(
 mod tests {
     use super::*;
     use crate::account::aleo_private_key_new;
-    use std::ffi::CString;
+    use crate::helpers::test_helpers::{c, call_ffi};
 
     #[test]
     fn test_sign_and_verify() {
-        let sk_ptr = aleo_private_key_new();
-        let sk_str = unsafe { std::ffi::CStr::from_ptr(sk_ptr).to_str().unwrap().to_owned() };
-        crate::aleo_free_string(sk_ptr);
+        let sk_str = call_ffi(aleo_private_key_new);
+        let csk = c(&sk_str);
 
-        let csk = CString::new(sk_str.clone()).unwrap();
-
-        // Derive address
-        let addr_ptr = crate::account::aleo_private_key_to_address(csk.as_ptr());
-        let addr_str = unsafe { std::ffi::CStr::from_ptr(addr_ptr).to_str().unwrap().to_owned() };
-        crate::aleo_free_string(addr_ptr);
+        let addr_str = call_ffi(|| crate::account::aleo_private_key_to_address(csk.as_ptr()));
+        let caddr = c(&addr_str);
 
         let msg = b"test message";
-        let sig_ptr = aleo_sign_message(csk.as_ptr(), msg.as_ptr(), msg.len());
-        assert!(!sig_ptr.is_null());
-        let sig_str = unsafe { std::ffi::CStr::from_ptr(sig_ptr).to_str().unwrap().to_owned() };
+        let sig_str = call_ffi(|| aleo_sign_message(csk.as_ptr(), msg.as_ptr(), msg.len()));
         assert!(!sig_str.contains("error"));
-        crate::aleo_free_string(sig_ptr);
 
-        let caddr = CString::new(addr_str).unwrap();
-        let csig = CString::new(sig_str).unwrap();
+        let csig = c(&sig_str);
         let result = aleo_verify_signature(caddr.as_ptr(), msg.as_ptr(), msg.len(), csig.as_ptr());
         assert_eq!(result, 1);
     }
 
     #[test]
     fn test_verify_wrong_message() {
-        let sk_ptr = aleo_private_key_new();
-        let sk_str = unsafe { std::ffi::CStr::from_ptr(sk_ptr).to_str().unwrap().to_owned() };
-        crate::aleo_free_string(sk_ptr);
+        let sk_str = call_ffi(aleo_private_key_new);
+        let csk = c(&sk_str);
 
-        let csk = CString::new(sk_str).unwrap();
-        let addr_ptr = crate::account::aleo_private_key_to_address(csk.as_ptr());
-        let addr_str = unsafe { std::ffi::CStr::from_ptr(addr_ptr).to_str().unwrap().to_owned() };
-        crate::aleo_free_string(addr_ptr);
+        let addr_str = call_ffi(|| crate::account::aleo_private_key_to_address(csk.as_ptr()));
+        let caddr = c(&addr_str);
 
         let msg = b"correct";
-        let sig_ptr = aleo_sign_message(csk.as_ptr(), msg.as_ptr(), msg.len());
-        let sig_str = unsafe { std::ffi::CStr::from_ptr(sig_ptr).to_str().unwrap().to_owned() };
-        crate::aleo_free_string(sig_ptr);
+        let sig_str = call_ffi(|| aleo_sign_message(csk.as_ptr(), msg.as_ptr(), msg.len()));
+        let csig = c(&sig_str);
 
-        let caddr = CString::new(addr_str).unwrap();
-        let csig = CString::new(sig_str).unwrap();
         let wrong = b"wrong";
         let result = aleo_verify_signature(caddr.as_ptr(), wrong.as_ptr(), wrong.len(), csig.as_ptr());
         assert_eq!(result, 0);
@@ -118,14 +103,10 @@ mod tests {
 
     #[test]
     fn test_sign_empty_message() {
-        let sk_ptr = aleo_private_key_new();
-        let sk_str = unsafe { std::ffi::CStr::from_ptr(sk_ptr).to_str().unwrap().to_owned() };
-        crate::aleo_free_string(sk_ptr);
+        let sk_str = call_ffi(aleo_private_key_new);
+        let csk = c(&sk_str);
 
-        let csk = CString::new(sk_str).unwrap();
-        let sig_ptr = aleo_sign_message(csk.as_ptr(), std::ptr::null(), 0);
-        let sig_str = unsafe { std::ffi::CStr::from_ptr(sig_ptr).to_str().unwrap().to_owned() };
+        let sig_str = call_ffi(|| aleo_sign_message(csk.as_ptr(), std::ptr::null(), 0));
         assert!(!sig_str.contains("error"), "sign empty failed: {}", sig_str);
-        crate::aleo_free_string(sig_ptr);
     }
 }

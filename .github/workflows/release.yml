@@ -50,6 +50,8 @@ jobs:
           printf '[target.aarch64-unknown-linux-gnu]\nlinker = "aarch64-linux-gnu-gcc"\n' > rust-bridge/.cargo/config.toml
 
       - name: Build
+        env:
+          CC: ${{ matrix.cross && 'aarch64-linux-gnu-gcc' || '' }}
         run: cargo build --release --target ${{ matrix.target }}
         working-directory: rust-bridge
 

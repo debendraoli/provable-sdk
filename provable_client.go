@@ -177,7 +177,7 @@ func (c *ProvableClient) fetchJWT(ctx context.Context) (string, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("JWT request failed (status %d): %s", resp.StatusCode, string(body))
 	}

@@ -15,7 +15,7 @@ type N = MainnetV0;
 
 /// Decrypt a record ciphertext with a view key.
 /// Returns the plaintext record as a string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_decrypt_record(
     ciphertext_ptr: *const c_char,
     vk_ptr: *const c_char,
@@ -33,7 +33,7 @@ pub extern "C" fn aleo_decrypt_record(
 
 /// Execute a program function offline (local synthesis + proving).
 /// Returns JSON with the execution result.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_execute_program(
     program_source_ptr: *const c_char,
     function_name_ptr: *const c_char,
@@ -89,7 +89,7 @@ pub extern "C" fn aleo_execute_program(
 
 /// Parse an Aleo instructions program and return its program ID.
 /// Returns the program ID on success or `{"error":"..."}`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_program_id(program_source_ptr: *const c_char) -> *mut c_char {
     ffi_catch!("panic during program parsing",
         let source = unsafe { read_c_str(program_source_ptr) }.ok_or("null program source")?;

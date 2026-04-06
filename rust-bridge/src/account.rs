@@ -13,7 +13,7 @@ type N = MainnetV0;
 /// Generate a new random Aleo private key.
 /// Returns the key as a string, e.g. "APrivateKey1zkp...".
 /// On error returns `{"error":"..."}`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_private_key_new() -> *mut c_char {
     ffi_catch!("panic during key generation",
         let rng = &mut thread_rng();
@@ -23,7 +23,7 @@ pub extern "C" fn aleo_private_key_new() -> *mut c_char {
 }
 
 /// Derive the view key from a private key string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_private_key_to_view_key(sk_ptr: *const c_char) -> *mut c_char {
     ffi_catch!("panic during view key derivation",
         let sk_str = unsafe { read_c_str(sk_ptr) }.ok_or("null private key pointer")?;
@@ -34,7 +34,7 @@ pub extern "C" fn aleo_private_key_to_view_key(sk_ptr: *const c_char) -> *mut c_
 }
 
 /// Derive the address from a private key string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_private_key_to_address(sk_ptr: *const c_char) -> *mut c_char {
     ffi_catch!("panic during address derivation",
         let sk_str = unsafe { read_c_str(sk_ptr) }.ok_or("null private key pointer")?;
@@ -45,7 +45,7 @@ pub extern "C" fn aleo_private_key_to_address(sk_ptr: *const c_char) -> *mut c_c
 }
 
 /// Derive the address from a view key string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_view_key_to_address(vk_ptr: *const c_char) -> *mut c_char {
     ffi_catch!("panic during address derivation from view key",
         let vk_str = unsafe { read_c_str(vk_ptr) }.ok_or("null view key pointer")?;
@@ -57,7 +57,7 @@ pub extern "C" fn aleo_view_key_to_address(vk_ptr: *const c_char) -> *mut c_char
 
 /// Derive the compute key from a private key string.
 /// Returns the compute key as a JSON string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_private_key_to_compute_key(sk_ptr: *const c_char) -> *mut c_char {
     ffi_catch!("panic during compute key derivation",
         let sk_str = unsafe { read_c_str(sk_ptr) }.ok_or("null private key pointer")?;
@@ -69,7 +69,7 @@ pub extern "C" fn aleo_private_key_to_compute_key(sk_ptr: *const c_char) -> *mut
 
 /// Derive the graph key from a view key string.
 /// Returns the graph key as a string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_view_key_to_graph_key(vk_ptr: *const c_char) -> *mut c_char {
     ffi_catch!("panic during graph key derivation",
         let vk_str = unsafe { read_c_str(vk_ptr) }.ok_or("null view key pointer")?;
@@ -81,7 +81,7 @@ pub extern "C" fn aleo_view_key_to_graph_key(vk_ptr: *const c_char) -> *mut c_ch
 
 /// Derive all keys from a private key in a single FFI call.
 /// Returns a JSON object: {"view_key":"...","address":"...","compute_key":"...","graph_key":"..."}
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_derive_all_keys(sk_ptr: *const c_char) -> *mut c_char {
     ffi_catch!("panic during key derivation",
         let sk_str = unsafe { read_c_str(sk_ptr) }.ok_or("null private key pointer")?;

@@ -42,7 +42,7 @@ pub(crate) fn get_or_init_process() -> Result<&'static Process<N>, String> {
 ///
 /// # Returns
 /// JSON-serialized Authorization on success, or `{"error":"..."}` on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_authorize(
     private_key_ptr: *const c_char,
     program_source_ptr: *const c_char,
@@ -127,7 +127,7 @@ pub extern "C" fn aleo_authorize(
 ///
 /// # Returns
 /// Base64-encoded LE bytes on success, or `{"error":"..."}` on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_proving_request_to_bytes(
     auth_json_ptr: *const c_char,
     fee_auth_json_ptr: *const c_char,

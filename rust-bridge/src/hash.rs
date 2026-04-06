@@ -36,7 +36,7 @@ fn literal_to_field(input: &str) -> Result<Field<N>, String> {
 /// BHP hash functions: take bits as input, return a field.
 macro_rules! define_bhp_hash_ffi {
     ($fn_name:ident, $hasher:ident) => {
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn $fn_name(input_ptr: *const c_char) -> *mut c_char {
             ffi_catch!(
                 concat!("panic during ", stringify!($hasher)),
@@ -53,7 +53,7 @@ macro_rules! define_bhp_hash_ffi {
 /// Pedersen hash functions: take bits as input, return a field.
 macro_rules! define_ped_hash_ffi {
     ($fn_name:ident, $hasher:ident) => {
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn $fn_name(input_ptr: *const c_char) -> *mut c_char {
             ffi_catch!(
                 concat!("panic during ", stringify!($hasher)),
@@ -70,7 +70,7 @@ macro_rules! define_ped_hash_ffi {
 /// Poseidon hash functions: take fields as input, return a field.
 macro_rules! define_psd_hash_ffi {
     ($fn_name:ident, $hasher:ident) => {
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn $fn_name(input_ptr: *const c_char) -> *mut c_char {
             ffi_catch!(
                 concat!("panic during ", stringify!($hasher)),
@@ -99,7 +99,7 @@ define_psd_hash_ffi!(aleo_hash_psd8, hash_psd8);
 /// Multi-input Poseidon hash. Takes a JSON array of literal strings.
 macro_rules! define_psd_hash_multi_ffi {
     ($fn_name:ident, $hasher:ident) => {
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn $fn_name(inputs_json_ptr: *const c_char) -> *mut c_char {
             ffi_catch!(
                 concat!("panic during multi-input ", stringify!($hasher)),

@@ -13,7 +13,7 @@ type N = MainnetV0;
 /// Sign a message with a private key.
 /// `msg_ptr` points to the raw bytes, `msg_len` is the byte count.
 /// Returns the signature as a string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_sign_message(
     sk_ptr: *const c_char,
     msg_ptr: *const u8,
@@ -35,7 +35,7 @@ pub extern "C" fn aleo_sign_message(
 
 /// Verify a signature against an address and message.
 /// Returns 1 for valid, 0 for invalid, -1 for error.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_verify_signature(
     addr_ptr: *const c_char,
     msg_ptr: *const u8,

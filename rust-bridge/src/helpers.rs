@@ -23,7 +23,7 @@ pub unsafe fn read_c_str<'a>(ptr: *const c_char) -> Option<&'a str> {
     if ptr.is_null() {
         return None;
     }
-    CStr::from_ptr(ptr).to_str().ok()
+    unsafe { CStr::from_ptr(ptr) }.to_str().ok()
 }
 
 /// Wraps an FFI function body with panic::catch_unwind and the standard

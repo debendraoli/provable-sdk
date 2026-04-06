@@ -29,8 +29,8 @@ sdk/
 
 ## Prerequisites
 
-- **Go** 1.21+
-- **Rust** 1.75+ (with `cargo`)
+- **Go** 1.26+
+- **Rust** 1.85+ (with `cargo`)
 - **C compiler** (for CGO)
 
 ## Build
@@ -42,6 +42,11 @@ make build
 # Build only the Rust bridge
 make build-rust
 ```
+
+## Performance Notes
+
+- **`GOEXPERIMENT=jsonv2`**: Go 1.25+ includes experimental `encoding/json/v2` which provides faster JSON decoding. The SDK does heavy JSON marshaling for authorization blobs and proving requests. Enable via `GOEXPERIMENT=jsonv2 go build ./...` for better decode performance — no code changes needed.
+- **`GOEXPERIMENT=runtimesecret`**: Go 1.26 has an experimental `runtime/secret` package for hardware-assisted key erasure. The SDK includes an optional `zeroize_secret.go` that uses it when this experiment is enabled.
 
 ## Quick Start
 

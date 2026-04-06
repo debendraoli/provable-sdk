@@ -9,7 +9,7 @@ type N = MainnetV0;
 /// Verify an execution proof offline.
 /// `execution_json_ptr` is the JSON-serialized Execution.
 /// Returns "true" on success, or `{"error":"..."}` on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn aleo_verify_execution(execution_json_ptr: *const c_char) -> *mut c_char {
     use snarkvm_algorithms::snark::varuna::VarunaVersion;
     use snarkvm_console::network::ConsensusVersion;

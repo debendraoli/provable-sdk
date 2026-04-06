@@ -25,14 +25,14 @@ jobs:
             lib: libaleo_bridge.so
             cross: true
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
             lib: libaleo_bridge.dylib
           - target: aarch64-apple-darwin
             os: macos-latest
             lib: libaleo_bridge.dylib
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -46,9 +46,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo '[target.aarch64-unknown-linux-gnu]' >> rust-bridge/.cargo/config.toml
-          echo 'linker = "aarch64-linux-gnu-gcc"' >> rust-bridge/.cargo/config.toml
           mkdir -p rust-bridge/.cargo
+          printf '[target.aarch64-unknown-linux-gnu]\nlinker = "aarch64-linux-gnu-gcc"\n' > rust-bridge/.cargo/config.toml
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
@@ -60,7 +59,7 @@ jobs:
           cp rust-bridge/target/${{ matrix.target }}/release/${{ matrix.lib }} dist/
           tar czf provable-sdk-${{ matrix.target }}.tar.gz -C dist ${{ matrix.lib }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: provable-sdk-${{ matrix.target }}
           path: provable-sdk-${{ matrix.target }}.tar.gz
@@ -70,8 +69,8 @@ jobs:
     needs: [build-native]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
           merge-multiple: true

@@ -41,10 +41,10 @@ Download and install the prebuilt native library, then `go get`:
 
 ```bash
 # One-liner install (Linux / macOS)
-curl -fsSL https://raw.githubusercontent.com/debendraoli/go-provable-sdk/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/debendraoli/provable-sdk/main/install.sh | bash
 
 # Or specify a version
-curl -fsSL https://raw.githubusercontent.com/debendraoli/go-provable-sdk/main/install.sh | bash -s v0.1.0
+curl -fsSL https://raw.githubusercontent.com/debendraoli/provable-sdk/main/install.sh | bash -s v0.1.0
 
 # Then add the SDK to your project
 go get github.com/debendraoli/provable-sdk
@@ -55,8 +55,8 @@ go get github.com/debendraoli/provable-sdk
 Requires Rust 1.85+:
 
 ```bash
-git clone https://github.com/debendraoli/go-provable-sdk.git
-cd go-provable-sdk
+git clone https://github.com/debendraoli/provable-sdk.git
+cd provable-sdk
 
 # Build and install the native library to /usr/local/lib
 make install-lib

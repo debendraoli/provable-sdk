@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-REPO="debendraoli/go-provable-sdk"
+REPO="debendraoli/provable-sdk"
 VERSION="${1:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/lib}"
 

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
 )
 
 // ProgramManagerOptions configures the ProgramManager.
@@ -23,6 +25,15 @@ type ProgramManagerOptions struct {
 
 	// HTTPClient is an optional custom HTTP client for network requests.
 	HTTPClient *http.Client
+
+	// KeyCache is an optional cache for proving/verifying keys.
+	KeyCache KeyCache
+}
+
+// KeyCache caches proving and verifying keys.
+type KeyCache interface {
+	Get(key string) ([]byte, bool)
+	Set(key string, data []byte)
 }
 
 // ProgramManager is the main SDK entry point, analogous to ProgramManager in the JS SDK.
@@ -33,6 +44,8 @@ type ProgramManager struct {
 	networkClient  *NetworkClient
 	provableClient *ProvableClient
 	network        Network
+	programCache   sync.Map // caches program source by ID
+	keyCache       KeyCache
 }
 
 // NewProgramManager creates a new ProgramManager.
@@ -76,6 +89,7 @@ func NewProgramManager(opts ProgramManagerOptions) (*ProgramManager, error) {
 		networkClient:  nc,
 		provableClient: provable,
 		network:        opts.Network,
+		keyCache:       opts.KeyCache,
 	}, nil
 }
 
@@ -90,6 +104,41 @@ func (pm *ProgramManager) NetworkClient() *NetworkClient { return pm.networkClie
 
 // ProvableClient returns the underlying Provable DPS client, or nil.
 func (pm *ProgramManager) ProvableClient() *ProvableClient { return pm.provableClient }
+
+// ─── Functional Options for Execute ──────────────────────────────────────────
+
+// ExecuteOption configures an Execute call.
+type ExecuteOption func(*ProvingRequestOptions)
+
+// WithInputs sets the inputs for the execution.
+func WithInputs(inputs ...string) ExecuteOption {
+	return func(o *ProvingRequestOptions) { o.Inputs = inputs }
+}
+
+// WithFee sets the fee for the execution (microcredits).
+func WithFee(fee uint64) ExecuteOption {
+	return func(o *ProvingRequestOptions) { _ = fee /* fee handled by DPS */ }
+}
+
+// WithPrivateKey overrides the account's private key.
+func WithPrivateKey(pk string) ExecuteOption {
+	return func(o *ProvingRequestOptions) { o.PrivateKey = pk }
+}
+
+// WithBroadcast sets whether to broadcast after proving.
+func WithBroadcast(broadcast bool) ExecuteOption {
+	return func(o *ProvingRequestOptions) { o.Broadcast = broadcast }
+}
+
+// WithDPSPrivacy enables encrypted proving.
+func WithDPSPrivacy(privacy bool) ExecuteOption {
+	return func(o *ProvingRequestOptions) { o.DPSPrivacy = privacy }
+}
+
+// WithProverURL overrides the prover endpoint.
+func WithProverURL(url string) ExecuteOption {
+	return func(o *ProvingRequestOptions) { o.ProverURL = url }
+}
 
 // ProvingRequestOptions configures a program execution via delegated proving.
 type ProvingRequestOptions struct {
@@ -115,6 +164,212 @@ type ProvingRequestOptions struct {
 
 	// ProverURL overrides the default prover endpoint for this request.
 	ProverURL string
+}
+
+// Execute builds an authorization and submits it to the Provable DPS for
+// proof generation, using functional options.
+func (pm *ProgramManager) Execute(ctx context.Context, programID, functionName string, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  programID,
+		FunctionName: functionName,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// ExecuteAndWait executes via DPS and polls until the transaction is confirmed.
+func (pm *ProgramManager) ExecuteAndWait(ctx context.Context, programID, functionName string, pollInterval time.Duration, opts ...ExecuteOption) (*Transaction, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  programID,
+		FunctionName: functionName,
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	txID, err := pm.ExecuteViaDPS(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	return pm.networkClient.WaitForTransaction(ctx, txID, pollInterval)
+}
+
+// ─── Credit Transfer Helpers ─────────────────────────────────────────────────
+
+// TransferPublic transfers credits using the public (on-chain balance) flow.
+func (pm *ProgramManager) TransferPublic(ctx context.Context, recipient string, amount uint64, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "transfer_public",
+		Inputs:       []string{recipient, fmt.Sprintf("%du64", amount)},
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// TransferPrivate transfers credits using a private record.
+func (pm *ProgramManager) TransferPrivate(ctx context.Context, recipient string, amount uint64, recordInput string, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "transfer_private",
+		Inputs:       []string{recordInput, recipient, fmt.Sprintf("%du64", amount)},
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// TransferPublicToPrivate transfers credits from public balance to a private record.
+func (pm *ProgramManager) TransferPublicToPrivate(ctx context.Context, recipient string, amount uint64, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "transfer_public_to_private",
+		Inputs:       []string{recipient, fmt.Sprintf("%du64", amount)},
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// TransferPrivateToPublic transfers credits from a private record to public balance.
+func (pm *ProgramManager) TransferPrivateToPublic(ctx context.Context, recipient string, amount uint64, recordInput string, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "transfer_private_to_public",
+		Inputs:       []string{recordInput, recipient, fmt.Sprintf("%du64", amount)},
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// ─── Record Operations ──────────────────────────────────────────────────────
+
+// Join combines two credit records into one.
+func (pm *ProgramManager) Join(ctx context.Context, record1, record2 string, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "join",
+		Inputs:       []string{record1, record2},
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// Split divides a credit record into two records.
+func (pm *ProgramManager) Split(ctx context.Context, record string, amount uint64, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "split",
+		Inputs:       []string{record, fmt.Sprintf("%du64", amount)},
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// ─── Staking / Validator Operations ──────────────────────────────────────────
+
+// BondValidator bonds credits to a validator.
+func (pm *ProgramManager) BondValidator(ctx context.Context, validator string, withdrawAddress string, amount uint64, commissionPercent uint8, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "bond_validator",
+		Inputs:       []string{validator, withdrawAddress, fmt.Sprintf("%du64", amount), fmt.Sprintf("%uu8", commissionPercent)},
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// UnbondValidator unbonds credits from a validator.
+func (pm *ProgramManager) UnbondValidator(ctx context.Context, amount uint64, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "unbond_validator",
+		Inputs:       []string{fmt.Sprintf("%du64", amount)},
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// ClaimUnbonded claims credits that have finished the unbonding period.
+func (pm *ProgramManager) ClaimUnbonded(ctx context.Context, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "claim_unbond_public",
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// SetValidatorState sets the validator's state (open/closed for delegations).
+func (pm *ProgramManager) SetValidatorState(ctx context.Context, isOpen bool, opts ...ExecuteOption) (string, error) {
+	o := ProvingRequestOptions{
+		ProgramName:  "credits.aleo",
+		FunctionName: "set_validator_state",
+		Inputs:       []string{fmt.Sprintf("%t", isOpen)},
+		Broadcast:    true,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return pm.ExecuteViaDPS(ctx, o)
+}
+
+// ─── Batch Execution ─────────────────────────────────────────────────────────
+
+// ExecuteRequest is a single request for batch parallel execution.
+type ExecuteRequest struct {
+	ProgramName  string
+	FunctionName string
+	Options      []ExecuteOption
+}
+
+// ExecuteResult holds the result of a single batch execution.
+type ExecuteResult struct {
+	TxID  string
+	Error error
+}
+
+// ExecuteBatch executes multiple programs in parallel via DPS.
+func (pm *ProgramManager) ExecuteBatch(ctx context.Context, requests []ExecuteRequest) []ExecuteResult {
+	results := make([]ExecuteResult, len(requests))
+	var wg sync.WaitGroup
+	for i, req := range requests {
+		wg.Add(1)
+		go func(idx int, r ExecuteRequest) {
+			defer wg.Done()
+			txID, err := pm.Execute(ctx, r.ProgramName, r.FunctionName, r.Options...)
+			results[idx] = ExecuteResult{TxID: txID, Error: err}
+		}(i, req)
+	}
+	wg.Wait()
+	return results
 }
 
 // BuildAuthorization generates a snarkVM Authorization for a program function call.

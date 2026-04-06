@@ -13,6 +13,8 @@ extern char* aleo_private_key_new();
 extern char* aleo_private_key_to_view_key(const char* sk);
 extern char* aleo_private_key_to_address(const char* sk);
 extern char* aleo_view_key_to_address(const char* vk);
+extern char* aleo_private_key_to_compute_key(const char* sk);
+extern char* aleo_view_key_to_graph_key(const char* vk);
 
 // Signing / verification
 extern char* aleo_sign_message(const char* sk, const void* msg, size_t msg_len);
@@ -28,6 +30,20 @@ extern char* aleo_program_id(const char* program_source);
 // Authorization
 extern char* aleo_authorize(const char* private_key, const char* program_source, const char* function_name, const char* inputs_json, const char* imports_json);
 extern char* aleo_proving_request_to_bytes(const char* auth_json, const char* fee_auth_json, _Bool broadcast);
+
+// Hash functions
+extern char* aleo_hash_bhp256(const char* input);
+extern char* aleo_hash_bhp512(const char* input);
+extern char* aleo_hash_bhp768(const char* input);
+extern char* aleo_hash_bhp1024(const char* input);
+extern char* aleo_hash_ped64(const char* input);
+extern char* aleo_hash_ped128(const char* input);
+extern char* aleo_hash_psd2(const char* input);
+extern char* aleo_hash_psd4(const char* input);
+extern char* aleo_hash_psd8(const char* input);
+
+// Verification
+extern char* aleo_verify_execution(const char* execution_json);
 
 // Memory management
 extern void aleo_free_string(char* ptr);
@@ -185,4 +201,98 @@ func Authorize(privateKey, programSource, functionName, inputsJSON, importsJSON 
 	cimports := C.CString(importsJSON)
 	defer C.free(unsafe.Pointer(cimports))
 	return resultOrError(C.aleo_authorize(csk, csrc, cfn, cinputs, cimports))
+}
+
+// ─── Key derivation ──────────────────────────────────────────────────────────
+
+// PrivateKeyToComputeKey derives a compute key from a private key via FFI.
+func PrivateKeyToComputeKey(sk string) (string, error) {
+	csk := C.CString(sk)
+	defer C.free(unsafe.Pointer(csk))
+	return resultOrError(C.aleo_private_key_to_compute_key(csk))
+}
+
+// ViewKeyToGraphKey derives a graph key from a view key via FFI.
+func ViewKeyToGraphKey(vk string) (string, error) {
+	cvk := C.CString(vk)
+	defer C.free(unsafe.Pointer(cvk))
+	return resultOrError(C.aleo_view_key_to_graph_key(cvk))
+}
+
+// ─── Hash functions ──────────────────────────────────────────────────────────
+
+// HashBHP256 computes a BHP256 hash of the input literal.
+func HashBHP256(input string) (string, error) {
+	cinput := C.CString(input)
+	defer C.free(unsafe.Pointer(cinput))
+	return resultOrError(C.aleo_hash_bhp256(cinput))
+}
+
+// HashBHP512 computes a BHP512 hash of the input literal.
+func HashBHP512(input string) (string, error) {
+	cinput := C.CString(input)
+	defer C.free(unsafe.Pointer(cinput))
+	return resultOrError(C.aleo_hash_bhp512(cinput))
+}
+
+// HashBHP768 computes a BHP768 hash of the input literal.
+func HashBHP768(input string) (string, error) {
+	cinput := C.CString(input)
+	defer C.free(unsafe.Pointer(cinput))
+	return resultOrError(C.aleo_hash_bhp768(cinput))
+}
+
+// HashBHP1024 computes a BHP1024 hash of the input literal.
+func HashBHP1024(input string) (string, error) {
+	cinput := C.CString(input)
+	defer C.free(unsafe.Pointer(cinput))
+	return resultOrError(C.aleo_hash_bhp1024(cinput))
+}
+
+// HashPedersen64 computes a Pedersen64 hash of the input literal.
+func HashPedersen64(input string) (string, error) {
+	cinput := C.CString(input)
+	defer C.free(unsafe.Pointer(cinput))
+	return resultOrError(C.aleo_hash_ped64(cinput))
+}
+
+// HashPedersen128 computes a Pedersen128 hash of the input literal.
+func HashPedersen128(input string) (string, error) {
+	cinput := C.CString(input)
+	defer C.free(unsafe.Pointer(cinput))
+	return resultOrError(C.aleo_hash_ped128(cinput))
+}
+
+// HashPoseidon2 computes a Poseidon2 hash of the input literal.
+func HashPoseidon2(input string) (string, error) {
+	cinput := C.CString(input)
+	defer C.free(unsafe.Pointer(cinput))
+	return resultOrError(C.aleo_hash_psd2(cinput))
+}
+
+// HashPoseidon4 computes a Poseidon4 hash of the input literal.
+func HashPoseidon4(input string) (string, error) {
+	cinput := C.CString(input)
+	defer C.free(unsafe.Pointer(cinput))
+	return resultOrError(C.aleo_hash_psd4(cinput))
+}
+
+// HashPoseidon8 computes a Poseidon8 hash of the input literal.
+func HashPoseidon8(input string) (string, error) {
+	cinput := C.CString(input)
+	defer C.free(unsafe.Pointer(cinput))
+	return resultOrError(C.aleo_hash_psd8(cinput))
+}
+
+// ─── Verification ────────────────────────────────────────────────────────────
+
+// VerifyExecution verifies a SNARK execution proof offline.
+func VerifyExecution(executionJSON string) (bool, error) {
+	cjson := C.CString(executionJSON)
+	defer C.free(unsafe.Pointer(cjson))
+	result, err := resultOrError(C.aleo_verify_execution(cjson))
+	if err != nil {
+		return false, err
+	}
+	return result == "true", nil
 }

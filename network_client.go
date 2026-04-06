@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,10 +21,14 @@ type NetworkClient struct {
 	network Network
 	http    *http.Client
 	headers map[string]string
+	logger  *slog.Logger
 
 	// Retry configuration
 	maxRetries int
 	baseDelay  time.Duration
+
+	// Rate limiting
+	rateLimiter *rateLimiter
 }
 
 // NetworkClientOption configures a NetworkClient.
@@ -46,18 +53,44 @@ func WithRetry(maxRetries int, baseDelay time.Duration) NetworkClientOption {
 	}
 }
 
+// WithLogger sets a structured logger for the client.
+func WithLogger(logger *slog.Logger) NetworkClientOption {
+	return func(nc *NetworkClient) { nc.logger = logger }
+}
+
+// WithRateLimit sets the maximum number of requests per second.
+func WithRateLimit(reqPerSec int) NetworkClientOption {
+	return func(nc *NetworkClient) {
+		if reqPerSec > 0 {
+			nc.rateLimiter = newRateLimiter(reqPerSec)
+		}
+	}
+}
+
 // NewNetworkClient creates a client for the Aleo node REST API.
 //
 //	host: e.g. "https://api.explorer.provable.com/v2"
 //	network: e.g. TestnetV0, MainnetV0
 func NewNetworkClient(host string, network Network, opts ...NetworkClientOption) *NetworkClient {
 	nc := &NetworkClient{
-		host:       strings.TrimRight(host, "/"),
-		network:    network,
-		http:       &http.Client{Timeout: 30 * time.Second},
+		host:    strings.TrimRight(host, "/"),
+		network: network,
+		http: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     90 * time.Second,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+			},
+		},
 		headers:    make(map[string]string),
 		maxRetries: 3,
 		baseDelay:  500 * time.Millisecond,
+		logger:     slog.Default(),
 	}
 	for _, o := range opts {
 		o(nc)
@@ -224,6 +257,167 @@ func (c *NetworkClient) GetLatestHash(ctx context.Context) (string, error) {
 	return strings.Trim(string(body), "\" \n"), nil
 }
 
+// GetStateRoot returns the latest state root.
+func (c *NetworkClient) GetStateRoot(ctx context.Context) (string, error) {
+	url := fmt.Sprintf("%s%s/latest/stateRoot", c.host, c.basePath())
+	body, err := c.get(ctx, url)
+	if err != nil {
+		return "", fmt.Errorf("get state root: %w", err)
+	}
+	return strings.Trim(string(body), "\" \n"), nil
+}
+
+// GetCommittee returns the current committee/validators as raw JSON.
+func (c *NetworkClient) GetCommittee(ctx context.Context) (json.RawMessage, error) {
+	url := fmt.Sprintf("%s%s/committee/latest", c.host, c.basePath())
+	body, err := c.get(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("get committee: %w", err)
+	}
+	return json.RawMessage(body), nil
+}
+
+// GetMempool returns pending transactions in the mempool as raw JSON.
+func (c *NetworkClient) GetMempool(ctx context.Context) (json.RawMessage, error) {
+	url := fmt.Sprintf("%s%s/memoryPool/transactions", c.host, c.basePath())
+	body, err := c.get(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("get mempool: %w", err)
+	}
+	return json.RawMessage(body), nil
+}
+
+// GetPeers returns the connected peers as a list of addresses.
+func (c *NetworkClient) GetPeers(ctx context.Context) ([]string, error) {
+	url := fmt.Sprintf("%s%s/peers/all", c.host, c.basePath())
+	body, err := c.get(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("get peers: %w", err)
+	}
+	var peers []string
+	if err := json.Unmarshal(body, &peers); err != nil {
+		return nil, fmt.Errorf("decode peers: %w", err)
+	}
+	return peers, nil
+}
+
+// GetPeerCount returns the number of connected peers.
+func (c *NetworkClient) GetPeerCount(ctx context.Context) (int, error) {
+	url := fmt.Sprintf("%s%s/peers/count", c.host, c.basePath())
+	body, err := c.get(ctx, url)
+	if err != nil {
+		return 0, fmt.Errorf("get peer count: %w", err)
+	}
+	var count int
+	if err := json.Unmarshal(body, &count); err != nil {
+		return 0, fmt.Errorf("decode peer count: %w", err)
+	}
+	return count, nil
+}
+
+// GetBlockRange fetches a range of blocks by height (inclusive).
+func (c *NetworkClient) GetBlockRange(ctx context.Context, start, end uint64) ([]*Block, error) {
+	url := fmt.Sprintf("%s%s/blocks?start=%d&end=%d", c.host, c.basePath(), start, end)
+	body, err := c.get(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("get block range %d-%d: %w", start, end, err)
+	}
+	var blocks []*Block
+	if err := json.Unmarshal(body, &blocks); err != nil {
+		return nil, fmt.Errorf("decode block range: %w", err)
+	}
+	return blocks, nil
+}
+
+// GetTransactionsByBlock fetches all transactions in a block by height.
+func (c *NetworkClient) GetTransactionsByBlock(ctx context.Context, height uint64) (json.RawMessage, error) {
+	url := fmt.Sprintf("%s%s/block/%d/transactions", c.host, c.basePath(), height)
+	body, err := c.get(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("get transactions for block %d: %w", height, err)
+	}
+	return json.RawMessage(body), nil
+}
+
+// SubmitTransactionDebug submits a transaction with the debug flag for verbose
+// error information from the node.
+func (c *NetworkClient) SubmitTransactionDebug(ctx context.Context, transaction json.RawMessage) (string, error) {
+	url := fmt.Sprintf("%s%s/transaction/broadcast?debug=true", c.host, c.basePath())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(transaction)))
+	if err != nil {
+		return "", fmt.Errorf("create broadcast request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.applyHeaders(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("broadcast request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read broadcast response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("broadcast failed (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	return strings.Trim(string(respBody), "\" \n"), nil
+}
+
+// GetStatePaths queries state paths for the given commitments against
+// a consistent state root.
+func (c *NetworkClient) GetStatePaths(ctx context.Context, commitments []string) (json.RawMessage, error) {
+	url := fmt.Sprintf("%s%s/statePath", c.host, c.basePath())
+
+	reqBody, err := json.Marshal(commitments)
+	if err != nil {
+		return nil, fmt.Errorf("marshal commitments: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return nil, fmt.Errorf("create state path request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.applyHeaders(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("state path request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read state path response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("state path failed (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	return json.RawMessage(body), nil
+}
+
+// GetMappingNames returns the mapping names for a deployed program.
+func (c *NetworkClient) GetMappingNames(ctx context.Context, programID string) ([]string, error) {
+	url := fmt.Sprintf("%s%s/program/%s/mappings", c.host, c.basePath(), programID)
+	body, err := c.get(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("get mappings %s: %w", programID, err)
+	}
+	var names []string
+	if err := json.Unmarshal(body, &names); err != nil {
+		return nil, fmt.Errorf("decode mappings: %w", err)
+	}
+	return names, nil
+}
+
 // SubmitTransaction broadcasts a transaction to the network.
 func (c *NetworkClient) SubmitTransaction(ctx context.Context, transaction json.RawMessage) (string, error) {
 	url := fmt.Sprintf("%s%s/transaction/broadcast", c.host, c.basePath())
@@ -275,11 +469,16 @@ func (c *NetworkClient) get(ctx context.Context, url string) ([]byte, error) {
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		if attempt > 0 {
 			delay := c.baseDelay * time.Duration(math.Pow(2, float64(attempt-1)))
+			c.logger.Debug("retrying request", "url", url, "attempt", attempt, "delay", delay)
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			case <-time.After(delay):
 			}
+		}
+
+		if c.rateLimiter != nil {
+			c.rateLimiter.wait(ctx)
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -291,6 +490,7 @@ func (c *NetworkClient) get(ctx context.Context, url string) ([]byte, error) {
 		resp, err := c.http.Do(req)
 		if err != nil {
 			lastErr = err
+			c.logger.Warn("request failed", "url", url, "error", err)
 			continue
 		}
 
@@ -320,5 +520,99 @@ func (c *NetworkClient) get(ctx context.Context, url string) ([]byte, error) {
 func (c *NetworkClient) applyHeaders(req *http.Request) {
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
+	}
+}
+
+// ─── Rate Limiter ────────────────────────────────────────────────────────────
+
+type rateLimiter struct {
+	mu       sync.Mutex
+	interval time.Duration
+	lastCall time.Time
+}
+
+func newRateLimiter(reqPerSec int) *rateLimiter {
+	return &rateLimiter{
+		interval: time.Second / time.Duration(reqPerSec),
+	}
+}
+
+func (rl *rateLimiter) wait(ctx context.Context) {
+	rl.mu.Lock()
+	now := time.Now()
+	if wait := rl.interval - now.Sub(rl.lastCall); wait > 0 {
+		rl.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+		rl.mu.Lock()
+	}
+	rl.lastCall = time.Now()
+	rl.mu.Unlock()
+}
+
+// ─── Block Iterator ──────────────────────────────────────────────────────────
+
+// BlockIterator provides a streaming interface for iterating over a range of blocks.
+type BlockIterator struct {
+	client *NetworkClient
+	ctx    context.Context
+	cur    uint64
+	end    uint64
+	block  *Block
+	err    error
+}
+
+// BlockIterator creates an iterator over blocks in the range [start, end].
+func (c *NetworkClient) BlockIterator(ctx context.Context, start, end uint64) *BlockIterator {
+	return &BlockIterator{
+		client: c,
+		ctx:    ctx,
+		cur:    start,
+		end:    end,
+	}
+}
+
+// Next advances the iterator to the next block. Returns false when done or on error.
+func (it *BlockIterator) Next() bool {
+	if it.cur > it.end || it.err != nil {
+		return false
+	}
+	it.block, it.err = it.client.GetBlock(it.ctx, it.cur)
+	if it.err != nil {
+		return false
+	}
+	it.cur++
+	return true
+}
+
+// Block returns the current block.
+func (it *BlockIterator) Block() *Block { return it.block }
+
+// Err returns the first error encountered during iteration.
+func (it *BlockIterator) Err() error { return it.err }
+
+// ─── Transaction Polling ─────────────────────────────────────────────────────
+
+// WaitForTransaction polls for a transaction ID until it is confirmed or the
+// context is cancelled. pollInterval controls how frequently to check.
+func (c *NetworkClient) WaitForTransaction(ctx context.Context, txID string, pollInterval time.Duration) (*Transaction, error) {
+	if pollInterval == 0 {
+		pollInterval = 3 * time.Second
+	}
+	c.logger.Info("waiting for transaction", "txID", txID)
+	for {
+		tx, err := c.GetTransaction(ctx, txID)
+		if err == nil {
+			return tx, nil
+		}
+		c.logger.Debug("transaction not found yet", "txID", txID)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(pollInterval):
+		}
 	}
 }

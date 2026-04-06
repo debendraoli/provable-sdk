@@ -69,7 +69,7 @@ func BuildAuthorization(ctx context.Context, nc *NetworkClient, opts Authorizati
 // returning their source strings in dependency order (leaves first).
 // credits.aleo is excluded since it's built into the Process.
 func resolveImportsOrdered(ctx context.Context, nc *NetworkClient, source string) ([]string, error) {
-	var ordered []string
+	ordered := make([]string, 0)
 	visited := make(map[string]bool)
 	if err := collectImports(ctx, nc, source, visited, &ordered); err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func resolveImportsOrdered(ctx context.Context, nc *NetworkClient, source string
 }
 
 func collectImports(ctx context.Context, nc *NetworkClient, source string, visited map[string]bool, ordered *[]string) error {
-	for _, line := range strings.Split(source, "\n") {
+	for line := range strings.SplitSeq(source, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "import ") {
 			continue

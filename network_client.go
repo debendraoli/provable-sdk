@@ -1,6 +1,7 @@
 package sdk
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -330,7 +331,7 @@ func (c *NetworkClient) GetStatePaths(ctx context.Context, commitments []string)
 		return nil, fmt.Errorf("marshal commitments: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(reqBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("create state path request: %w", err)
 	}
@@ -380,7 +381,7 @@ func (c *NetworkClient) submitTransaction(ctx context.Context, transaction json.
 		url += "?debug=true"
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(transaction)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(transaction))
 	if err != nil {
 		return "", fmt.Errorf("create broadcast request: %w", err)
 	}

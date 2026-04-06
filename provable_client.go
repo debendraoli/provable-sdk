@@ -1,6 +1,7 @@
 package sdk
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -294,7 +295,7 @@ func (c *ProvableClient) submitUnencrypted(ctx context.Context, jwt, proverBase 
 		return nil, fmt.Errorf("marshal proving request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, proverBase+"/prove", strings.NewReader(string(reqJSON)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, proverBase+"/prove", bytes.NewReader(reqJSON))
 	if err != nil {
 		return nil, fmt.Errorf("create prove request: %w", err)
 	}
@@ -338,7 +339,7 @@ func (c *ProvableClient) submitEncrypted(ctx context.Context, jwt, proverBase st
 		return nil, fmt.Errorf("marshal encrypted request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, proverBase+"/prove/encrypted", strings.NewReader(string(body)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, proverBase+"/prove/encrypted", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create encrypted prove request: %w", err)
 	}

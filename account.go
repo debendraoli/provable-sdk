@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"slices"
 
 	"github.com/debendraoli/provable-sdk/internal/ffi"
 	"golang.org/x/crypto/argon2"
@@ -164,10 +165,7 @@ func (a *Account) EncryptPrivateKey(password string) (string, error) {
 	ciphertext := gcm.Seal(nil, nonce, a.privateKey, nil)
 
 	// Format: salt || nonce || ciphertext
-	result := make([]byte, 0, len(salt)+len(nonce)+len(ciphertext))
-	result = append(result, salt...)
-	result = append(result, nonce...)
-	result = append(result, ciphertext...)
+	result := slices.Concat(salt, nonce, ciphertext)
 
 	return base64.StdEncoding.EncodeToString(result), nil
 }
